@@ -131,8 +131,8 @@ class ContributionGenerator:
                 "Follow WCAG guidelines where applicable."
             ),
             ContributionType.PERFORMANCE_OPT: (
-                "Optimize PERFORMANCE. Reduce time/space complexity, eliminate wasteful operations, "
-                "or improve resource usage."
+                "Optimize PERFORMANCE. Reduce time/space complexity, "
+                "eliminate wasteful operations, or improve resource usage."
             ),
             ContributionType.FEATURE_ADD: (
                 "Add this FEATURE. Keep the implementation clean, well-structured, and consistent "
@@ -247,7 +247,11 @@ class ContributionGenerator:
         files = ", ".join(c.path.split("/")[-1] for c in changes[:3])
 
         if self._config.commit_convention == "conventional":
-            return f"{prefix}: {finding.title.lower()}\n\n{finding.description}\n\nAffected files: {files}"
+            return (
+                f"{prefix}: {finding.title.lower()}\n\n"
+                f"{finding.description}\n\n"
+                f"Affected files: {files}"
+            )
         elif self._config.commit_convention == "angular":
             scope = changes[0].path.split("/")[0] if changes else ""
             return f"{prefix}({scope}): {finding.title.lower()}"

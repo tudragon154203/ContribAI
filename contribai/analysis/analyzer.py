@@ -8,6 +8,7 @@ a different lens and returns findings.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
@@ -141,15 +142,11 @@ class CodeAnalyzer:
         contributing = None
         relevant_files: dict[str, str] = {}
 
-        try:
+        with contextlib.suppress(Exception):
             readme = await self._github.get_file_content(repo.owner, repo.name, "README.md")
-        except Exception:
-            pass
 
-        try:
+        with contextlib.suppress(Exception):
             contributing = await self._github.get_contributing_guide(repo.owner, repo.name)
-        except Exception:
-            pass
 
         # Fetch a sample of source files (up to 15 most important)
         priority_files = self._prioritize_files(analyzable)[:15]

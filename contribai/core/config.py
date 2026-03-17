@@ -128,5 +128,5 @@ def load_config(path: str | Path | None = None) -> ContribAIConfig:
             except Exception as e:
                 raise ConfigError(f"Failed to load config from {p}: {e}") from e
 
-    # No config file found – use defaults
+    # No config file found - use defaults
     return ContribAIConfig()

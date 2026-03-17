@@ -58,11 +58,10 @@ class PRManager:
                 sha = None
                 if not change.is_new_file:
                     try:
-                        existing = await self._github.get_file_content(
+                        await self._github.get_file_content(
                             fork_owner, fork_name, change.path
                         )
                         # We need the SHA to update - fetch via contents API
-                        import httpx
 
                         resp = await self._github._get(
                             f"/repos/{fork_owner}/{fork_name}/contents/{change.path}",

@@ -7,11 +7,10 @@ targeted analysis rules beyond general code analysis.
 from __future__ import annotations
 
 import logging
-import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from contribai.core.models import ContributionType, FileNode, Finding, RepoContext, Severity
+from contribai.core.models import RepoContext
 
 logger = logging.getLogger(__name__)
 
@@ -84,24 +83,33 @@ class DjangoStrategy(FrameworkStrategy):
                 return FrameworkInfo(name="Django", config_file=f.path)
         # Check dependencies
         for path, content in context.relevant_files.items():
-            if "requirements" in path.lower() or path == "pyproject.toml":
-                if "django" in content.lower():
-                    return FrameworkInfo(name="Django", config_file=path)
+            if (
+                ("requirements" in path.lower() or path == "pyproject.toml")
+                and "django" in content.lower()
+            ):
+                return FrameworkInfo(name="Django", config_file=path)
         return None
 
     def get_analysis_prompt(self, context: RepoContext, info: FrameworkInfo) -> str:
         return """Analyze this Django project for:
 1. **Security**: CSRF protection, SQL injection in raw queries, DEBUG=True in production,
    SECRET_KEY exposure, missing ALLOWED_HOSTS, unsafe template rendering
-2. **Best Practices**: Missing migrations, N+1 queries in views, missing `select_related`/`prefetch_related`,
+2. **Best Practices**: Missing migrations, N+1 queries in views,
+   missing `select_related`/`prefetch_related`,
    fat views (logic should be in models/services), hardcoded URLs instead of `reverse()`
 3. **Common Issues**: Missing `__str__` on models, no admin registration, missing form validation,
    no error handling in views, missing pagination on list views
 4. **Performance**: Unbounded querysets, missing database indexes, no caching on repeated queries"""
 
     def get_critical_files(self, context: RepoContext) -> list[str]:
-        patterns = ["settings.py", "urls.py", "views.py", "models.py", "forms.py", "admin.py", "serializers.py"]
-        return [f.path for f in context.file_tree if any(f.path.endswith(p) for p in patterns)]
+        patterns = [
+            "settings.py", "urls.py", "views.py",
+            "models.py", "forms.py", "admin.py", "serializers.py",
+        ]
+        return [
+            f.path for f in context.file_tree
+            if any(f.path.endswith(p) for p in patterns)
+        ]
 
 
 class FlaskStrategy(FrameworkStrategy):

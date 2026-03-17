@@ -6,7 +6,6 @@ discover → analyze → generate → PR.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 
@@ -14,7 +13,6 @@ from contribai.analysis.analyzer import CodeAnalyzer
 from contribai.core.config import ContribAIConfig
 from contribai.core.models import (
     AnalysisResult,
-    Contribution,
     DiscoveryCriteria,
     PRResult,
     Repository,

@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
-from pathlib import Path
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
-
 
 # ── Enums ──────────────────────────────────────────────────────────────────────
 
 
-class ContributionType(str, Enum):
+class ContributionType(StrEnum):
     """Types of contributions the agent can make."""
 
     SECURITY_FIX = "security_fix"
@@ -24,7 +22,7 @@ class ContributionType(str, Enum):
     CODE_QUALITY = "code_quality"
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     """Severity level for findings."""
 
     LOW = "low"
@@ -33,7 +31,7 @@ class Severity(str, Enum):
     CRITICAL = "critical"
 
 
-class PRStatus(str, Enum):
+class PRStatus(StrEnum):
     """Status of a submitted pull request."""
 
     PENDING = "pending"

@@ -6,7 +6,6 @@ to avoid duplicate work and improve over time.
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -111,7 +110,7 @@ class Memory:
         )
         rows = await cursor.fetchall()
         cols = [d[0] for d in cursor.description]
-        return [dict(zip(cols, row)) for row in rows]
+        return [dict(zip(cols, row, strict=False)) for row in rows]
 
     # ── PRs ────────────────────────────────────────────────────────────────
 
@@ -156,7 +155,7 @@ class Memory:
             )
         rows = await cursor.fetchall()
         cols = [d[0] for d in cursor.description]
-        return [dict(zip(cols, row)) for row in rows]
+        return [dict(zip(cols, row, strict=False)) for row in rows]
 
     async def get_today_pr_count(self) -> int:
         """Get number of PRs created today."""

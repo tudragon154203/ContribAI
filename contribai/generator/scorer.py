@@ -10,7 +10,7 @@ import logging
 import re
 from dataclasses import dataclass
 
-from contribai.core.models import Contribution, ContributionType, FileChange
+from contribai.core.models import Contribution, ContributionType
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +95,15 @@ class QualityScorer:
         if total_lines == 0:
             return CheckResult("change_size", False, 0.0, "Empty changes")
         elif total_lines < 3:
-            return CheckResult("change_size", False, 0.3, f"Very small change ({total_lines} lines)")
+            return CheckResult(
+                "change_size", False, 0.3,
+                f"Very small change ({total_lines} lines)",
+            )
         elif total_lines > 500:
-            return CheckResult("change_size", False, 0.4, f"Very large change ({total_lines} lines)")
+            return CheckResult(
+                "change_size", False, 0.4,
+                f"Very large change ({total_lines} lines)",
+            )
         elif total_lines > 200:
             return CheckResult("change_size", True, 0.7, f"Large change ({total_lines} lines)")
         else:

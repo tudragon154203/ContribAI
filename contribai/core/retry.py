@@ -11,12 +11,11 @@ import functools
 import hashlib
 import json
 import logging
-import time
 from collections import OrderedDict
-from typing import Any, Callable, Type
+from collections.abc import Callable
+from typing import Any
 
 from contribai.core.exceptions import (
-    ContribAIError,
     GitHubAPIError,
     LLMError,
     LLMRateLimitError,
@@ -31,8 +30,8 @@ def async_retry(
     base_delay: float = 1.0,
     max_delay: float = 60.0,
     backoff_factor: float = 2.0,
-    retryable_exceptions: tuple[Type[Exception], ...] = (Exception,),
-    non_retryable_exceptions: tuple[Type[Exception], ...] = (),
+    retryable_exceptions: tuple[type[Exception], ...] = (Exception,),
+    non_retryable_exceptions: tuple[type[Exception], ...] = (),
 ):
     """Decorator for async functions with exponential backoff retry.
 

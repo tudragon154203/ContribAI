@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from contribai.core.models import FileNode, RepoContext, Repository
+from contribai.core.models import FileNode, RepoContext
 
 logger = logging.getLogger(__name__)
 

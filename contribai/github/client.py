@@ -134,7 +134,10 @@ class GitHubClient:
             params={"recursive": "1"},
         )
         return [
-            FileNode(path=item["path"], type=item["type"], size=item.get("size", 0), sha=item["sha"])
+            FileNode(
+                path=item["path"], type=item["type"],
+                size=item.get("size", 0), sha=item["sha"],
+            )
             for item in data.get("tree", [])
         ]
 

@@ -1,4 +1,4 @@
-"""ContribAI CLI – Rich command-line interface.
+"""ContribAI CLI - Rich command-line interface.
 
 Usage:
     contribai run           Auto-discover repos and contribute
@@ -232,8 +232,8 @@ def solve(ctx, url, max_issues, dry_run):
     console.print(f"   LLM: {config.llm.provider} ({config.llm.model})\n")
 
     from contribai.github.client import GitHubClient
-    from contribai.llm.provider import create_llm_provider
     from contribai.issues.solver import IssueSolver
+    from contribai.llm.provider import create_llm_provider
 
     async def _solve():
         parts = url.rstrip("/").split("/")
@@ -243,7 +243,7 @@ def solve(ctx, url, max_issues, dry_run):
         github = GitHubClient(token=config.github.token)
 
         try:
-            repo = await github.get_repo_details(owner, repo_name)
+            _repo = await github.get_repo_details(owner, repo_name)
             issues = await github.get_open_issues(owner, repo_name, per_page=20)
 
             solver = IssueSolver(llm=llm, github=github)
@@ -385,7 +385,6 @@ def show_config(ctx):
 
 def _print_result(result, dry_run: bool):
     """Print pipeline execution results."""
-    from contribai.orchestrator.pipeline import PipelineResult
 
     console.print()
     console.print(Panel(

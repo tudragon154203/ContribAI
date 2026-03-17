@@ -7,7 +7,7 @@ that are good candidates for contributions.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from contribai.core.config import DiscoveryConfig
 from contribai.core.models import DiscoveryCriteria, Repository
@@ -70,7 +70,7 @@ class RepoDiscovery:
 
             # Activity filter
             if criteria.min_last_activity_days:
-                cutoff = datetime.now(timezone.utc) - timedelta(days=criteria.min_last_activity_days)
+                cutoff = datetime.now(UTC) - timedelta(days=criteria.min_last_activity_days)
                 query_parts.append(f"pushed:>{cutoff.strftime('%Y-%m-%d')}")
 
             # Topic filter
@@ -117,7 +117,7 @@ class RepoDiscovery:
 
             # Check last activity
             if repo.last_push_at:
-                cutoff = datetime.now(timezone.utc) - timedelta(
+                cutoff = datetime.now(UTC) - timedelta(
                     days=criteria.min_last_activity_days
                 )
                 if repo.last_push_at < cutoff:

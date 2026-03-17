@@ -52,7 +52,7 @@ class LLMProvider(ABC):
     ) -> str:
         """Multi-turn chat completion."""
 
-    async def close(self):
+    async def close(self):  # noqa: B027
         """Clean up any resources."""
 
 
@@ -60,7 +60,7 @@ class LLMProvider(ABC):
 
 
 class GeminiProvider(LLMProvider):
-    """Google Gemini provider – primary/default."""
+    """Google Gemini provider - primary/default."""
 
     def __init__(self, config: LLMConfig):
         super().__init__(config)

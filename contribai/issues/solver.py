@@ -8,12 +8,10 @@ from __future__ import annotations
 
 import logging
 import re
-from enum import Enum
+from enum import StrEnum
 
 from contribai.core.models import (
-    Contribution,
     ContributionType,
-    FileChange,
     Finding,
     Issue,
     RepoContext,
@@ -24,7 +22,7 @@ from contribai.core.models import (
 logger = logging.getLogger(__name__)
 
 
-class IssueCategory(str, Enum):
+class IssueCategory(StrEnum):
     """Classification categories for GitHub issues."""
 
     BUG = "bug"
@@ -121,7 +119,7 @@ class IssueSolver:
         score = 2  # baseline
 
         # Good first issues are simple
-        if any("first" in l.lower() or "beginner" in l.lower() for l in issue.labels):
+        if any("first" in label.lower() or "beginner" in label.lower() for label in issue.labels):
             return 1
 
         # Body length hints at complexity
