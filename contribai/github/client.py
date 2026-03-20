@@ -292,9 +292,7 @@ class GitHubClient:
         """Get comments on a pull request (issue comments)."""
         return await self._get(f"/repos/{owner}/{repo}/issues/{pr_number}/comments")
 
-    async def create_pr_comment(
-        self, owner: str, repo: str, pr_number: int, body: str
-    ) -> dict:
+    async def create_pr_comment(self, owner: str, repo: str, pr_number: int, body: str) -> dict:
         """Post a comment on a pull request."""
         return await self._post(
             f"/repos/{owner}/{repo}/issues/{pr_number}/comments",

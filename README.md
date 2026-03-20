@@ -1,53 +1,74 @@
-# ContribAI 🤖
+# ContribAI
 
 > **AI Agent that automatically contributes to open source projects on GitHub**
 
 ContribAI discovers open source repositories, analyzes them for improvement opportunities, generates high-quality fixes, and submits them as Pull Requests — all autonomously.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-197%20passed-brightgreen)](#)
-[![Version](https://img.shields.io/badge/version-0.5.0-blue)](#)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-287%20passed-brightgreen)](#)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](#)
 
 ---
 
-## ✨ Features
+## Features
 
 ### Core Pipeline
-- 🔍 **Smart Discovery** – Finds contribution-friendly repos by language, stars, activity
-- 🔒 **Security Analysis** – Detects hardcoded secrets, SQL injection, XSS
-- ✨ **Code Quality** – Finds dead code, missing error handling, complexity issues
-- 📝 **Documentation** – Catches missing docstrings, incomplete READMEs
-- 🎨 **UI/UX** – Identifies accessibility issues, responsive design gaps
-- 🤖 **Multi-LLM** – Gemini (primary), OpenAI, Anthropic, Ollama
-- 📤 **Auto-PR** – Forks, branches, commits, and creates PRs automatically
+- **Smart Discovery** – Finds contribution-friendly repos by language, stars, activity
+- **Security Analysis** – Detects hardcoded secrets, SQL injection, XSS
+- **Code Quality** – Finds dead code, missing error handling, complexity issues
+- **Performance** – String allocation, blocking calls, N+1 queries
+- **Documentation** – Catches missing docstrings, incomplete READMEs
+- **UI/UX** – Identifies accessibility issues, responsive design gaps
+- **Refactoring** – Unused imports, non-null assertions, encoding issues
+- **Multi-LLM** – Gemini (primary), OpenAI, Anthropic, Ollama, Vertex AI
+- **Auto-PR** – Forks, branches, commits, and creates PRs automatically
 
-### Scale (v0.4.0+)
-- 🌐 **Web Dashboard** – FastAPI REST API + static dashboard at `:8787`
-- ⏰ **Scheduler** – APScheduler cron-based automated runs
-- ⚡ **Parallel Processing** – `asyncio.gather` + Semaphore (3 concurrent repos)
-- 📋 **Templates** – 5 built-in contribution templates (gitignore, license, badges, etc.)
-- 🎭 **Profiles** – Named presets: `security-focused`, `docs-focused`, `full-scan`, `gentle`
+### Hunt Mode (v0.11.0+)
+- **Autonomous hunting** – Discovers repos across GitHub and creates PRs at scale
+- **Multi-round** – Runs N rounds with configurable delay between rounds
+- **Cross-file fixes** – Detects the same pattern across multiple files and fixes all at once
+- **Duplicate prevention** – Title similarity matching prevents duplicate PRs
+- **Post-PR CI monitoring** – Auto-closes PRs that fail CI checks
 
-### Production Ready (v0.5.0)
-- 🔌 **Plugin System** – Entry-point based plugins for custom analyzers/generators
-- 🪝 **Webhooks** – GitHub webhook receiver for auto-triggering on issues/push
-- 📊 **Usage Quotas** – Track GitHub + LLM API calls with daily limits
-- 🔑 **API Auth** – API key authentication for dashboard mutation endpoints
-- 🐳 **Docker** – Dockerfile + docker-compose (dashboard, scheduler, runner)
+### Stealth Mode (v1.0.0)
+- **Human-like PRs** – No AI branding, clean PR body format
+- **CLA auto-signing** – Detects CLAAssistant/EasyCLA and auto-signs
+- **AI policy detection** – Skips repos that ban AI-generated contributions
+- **Smart validation** – Deep finding validation reduces false positives
+- **Rate limiting** – Max 2 findings per repo to avoid spamming
 
-## 🏗️ Architecture
+### Multi-Model Agent (v0.7.0+)
+- **Task routing** – Routes analysis/generation/review to different models
+- **Model tiers** – Fast models for triage, powerful for generation
+- **Vertex AI** – Google Cloud Vertex AI provider support
+- **Env var fallback** – Token/API key from environment variables
+
+### Platform (v0.4.0-v0.5.0)
+- **Web Dashboard** – FastAPI REST API + static dashboard at `:8787`
+- **Scheduler** – APScheduler cron-based automated runs
+- **Parallel Processing** – `asyncio.gather` + Semaphore (3 concurrent repos)
+- **Templates** – 5 built-in contribution templates
+- **Profiles** – Named presets: `security-focused`, `docs-focused`, `full-scan`, `gentle`
+- **Plugin System** – Entry-point based plugins for custom analyzers/generators
+- **Webhooks** – GitHub webhook receiver for auto-triggering on issues/push
+- **Usage Quotas** – Track GitHub + LLM API calls with daily limits
+- **API Auth** – API key authentication for dashboard mutation endpoints
+- **Docker** – Dockerfile + docker-compose (dashboard, scheduler, runner)
+
+## Architecture
 
 ```
-Discovery → Analysis → Generation → Quality Gate → PR
-    │           │           │            │            │
-    ▼           ▼           ▼            ▼            ▼
- GitHub    4 Analyzers   LLM-based    7-check      Fork+Branch
- Search    + Framework   code gen     scorer       +Commit+PR
- + Webhooks + Plugins   + self-review + Quotas     + Templates
+Discovery → Analysis → Validation → Generation → Quality Gate → PR → CI Monitor
+    │           │           │            │            │           │        │
+    ▼           ▼           ▼            ▼            ▼           ▼        ▼
+ GitHub    7 Analyzers  LLM deep     LLM-based    7-check     Fork+    Auto-close
+ Search    + Language   validate     code gen     scorer     Branch    on CI fail
+ + Hunt    + Framework  false pos.   + self-rev   + Quotas   +Commit   + CLA sign
+ + Webhooks + Plugins  + cross-file  + tests     + Policy   +PR       + Monitor
 ```
 
-## 📦 Installation
+## Installation
 
 ```bash
 git clone https://github.com/tang-vu/ContribAI.git
@@ -58,17 +79,12 @@ pip install -e ".[dev]"
 ### Docker
 
 ```bash
-# Build and run dashboard
-docker compose up -d dashboard
-
-# One-shot run
-docker compose run --rm runner run --dry-run
-
-# Dashboard + scheduler
-docker compose up -d dashboard scheduler
+docker compose up -d dashboard          # Dashboard at :8787
+docker compose run --rm runner run      # One-shot run
+docker compose up -d dashboard scheduler  # Dashboard + scheduler
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ```bash
 cp config.example.yaml config.yaml
@@ -90,14 +106,14 @@ discovery:
   stars_range: [100, 5000]
 ```
 
-## 🚀 Usage
+## Usage
 
-### Auto-discover and contribute
+### Hunt mode (autonomous mass contribution)
 
 ```bash
-contribai run                          # Full autonomous run
-contribai run --dry-run                # Preview without creating PRs
-contribai run --language python        # Filter by language
+contribai hunt                             # Hunt for repos and contribute
+contribai hunt --rounds 5 --delay 15       # 5 rounds, 15min delay
+contribai hunt --language python           # Filter by language
 ```
 
 ### Target a specific repo
@@ -105,6 +121,14 @@ contribai run --language python        # Filter by language
 ```bash
 contribai target https://github.com/owner/repo
 contribai target https://github.com/owner/repo --dry-run
+```
+
+### Auto-discover and contribute
+
+```bash
+contribai run                              # Full autonomous run
+contribai run --dry-run                    # Preview without creating PRs
+contribai run --language python            # Filter by language
 ```
 
 ### Solve open issues
@@ -116,18 +140,17 @@ contribai solve https://github.com/owner/repo
 ### Web Dashboard & Scheduler
 
 ```bash
-contribai serve                        # Dashboard at :8787
-contribai serve --port 9000            # Custom port
-contribai schedule --cron "0 */6 * * *"  # Auto-run every 6h
+contribai serve                            # Dashboard at :8787
+contribai serve --port 9000                # Custom port
+contribai schedule --cron "0 */6 * * *"    # Auto-run every 6h
 ```
 
 ### Templates & Profiles
 
 ```bash
-contribai templates                    # List contribution templates
-contribai profile list                 # List profiles
-contribai profile security-focused     # Run with profile
-contribai profile gentle --dry-run     # Gentle mode
+contribai templates                        # List contribution templates
+contribai profile list                     # List profiles
+contribai profile security-focused         # Run with profile
 ```
 
 ### Status & stats
@@ -135,10 +158,10 @@ contribai profile gentle --dry-run     # Gentle mode
 ```bash
 contribai status        # Check submitted PRs
 contribai stats         # Overall statistics
-contribai config        # View current config
+contribai info          # System info
 ```
 
-## 🔌 Plugin System
+## Plugin System
 
 Create custom analyzers as Python packages:
 
@@ -150,7 +173,6 @@ class MyAnalyzer(AnalyzerPlugin):
     def name(self): return "my-analyzer"
 
     async def analyze(self, context):
-        # Your analysis logic
         return findings
 ```
 
@@ -161,47 +183,50 @@ Register via entry points in `pyproject.toml`:
 my_analyzer = "my_package:MyAnalyzer"
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 contribai/
 ├── core/              # Config, models, exceptions, quotas, profiles
-├── llm/               # Multi-provider LLM (Gemini, OpenAI, Anthropic, Ollama)
-├── github/            # GitHub API client & repo discovery
-├── analysis/          # LLM-powered code analysis + framework strategies
+├── llm/               # Multi-provider LLM (Gemini, OpenAI, Anthropic, Ollama, Vertex)
+├── github/            # GitHub API client, repo discovery, guidelines
+├── analysis/          # 7 analyzers + language rules + framework strategies
 ├── generator/         # Contribution generator + self-review + quality scorer
 ├── issues/            # Issue-driven contribution solver
-├── pr/                # PR lifecycle manager
-├── orchestrator/      # Pipeline orchestrator & persistent memory
+├── pr/                # PR lifecycle manager + CLA handler
+├── orchestrator/      # Pipeline orchestrator, hunt mode, persistent memory
+├── notifications/     # Slack, Discord, Telegram notifications
 ├── plugins/           # Plugin system (analyzer/generator extensions)
 ├── templates/         # Contribution templates (5 built-in YAML)
 ├── scheduler/         # APScheduler cron-based automation
 ├── web/               # FastAPI dashboard, auth, webhooks
-└── cli/               # Rich CLI (11 commands)
+└── cli/               # Rich CLI + interactive TUI
 ```
 
-## 🧪 Testing
+## Testing
 
 ```bash
-pytest tests/ -v                  # Run all 197 tests
+pytest tests/ -v                  # Run all 287 tests
 pytest tests/ -v --cov=contribai  # With coverage
 ruff check contribai/             # Lint
 ruff format contribai/            # Format
 ```
 
-## 🛡️ Safety
+## Safety
 
 - **Daily PR limit** – Configurable max PRs per day (default: 10)
 - **Quality scorer** – 7-check gate prevents low-quality PRs
+- **Deep validation** – LLM validates findings against full file context
+- **AI policy detection** – Skips repos that ban AI contributions
+- **Duplicate prevention** – Title similarity matching prevents spam
+- **CI monitoring** – Auto-closes PRs that fail CI checks
 - **API quotas** – Track and limit GitHub + LLM usage daily
-- **API key auth** – Protect dashboard mutation endpoints
-- **Webhook verification** – HMAC-SHA256 signature checking
 - **Dry run mode** – Preview everything without creating PRs
 - **Rate limit awareness** – Exponential backoff with jitter
 
-## 📄 License
+## License
 
-MIT License – see [LICENSE](LICENSE) for details.
+AGPL-3.0 + Commons Clause – see [LICENSE](LICENSE) for details.
 
 ---
 

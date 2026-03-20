@@ -359,10 +359,7 @@ class PRManager:
             body_lower = body.lower()
 
             # Detect CLA bots
-            if any(
-                kw in login.lower()
-                for kw in ["cla", "easycla", "claassistant"]
-            ) or any(
+            if any(kw in login.lower() for kw in ["cla", "easycla", "claassistant"]) or any(
                 kw in body_lower
                 for kw in [
                     "contributor license agreement",

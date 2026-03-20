@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-03-20
+
+### Added
+- **Stealth Mode**: PRs appear human-written — no ContribAI branding in body, branch names, or comments
+- **CLA Auto-signing**: Detects CLAAssistant/EasyCLA bots and auto-signs CLA agreements
+- **AI Policy Detection**: Checks `AI_POLICY.md` and `CONTRIBUTING.md` for anti-AI contribution policies, skips banned repos
+- **Max 2 findings per repo**: Prevents spamming repos with too many PRs
+- `create_pr_comment()` method in GitHubClient
+
+### Changed
+- Branch names: `fix/xxx` instead of `contribai/fix-xxx` (stealth)
+- PR body: clean `## Problem / ## Solution / ## Changes` format
+- CI auto-close message: no branding or emoji
+- License: AGPL-3.0 + Commons Clause (from MIT)
+
+### Fixed
+- Updated all test assertions to v1.0.0
+
+## [0.11.0] - 2026-03-20
+
+### Added
+- **Hunt Mode**: Autonomous multi-round repo discovery and PR creation
+- `contribai hunt --rounds N --delay M` CLI command
+- Configurable delay between hunt rounds
+- 5 new tests (total: 287 tests)
+
+## [0.10.0] - 2026-03-20
+
+### Added
+- **GitHub API dedup**: Prevents searching same repos twice across rounds
+- **Cross-file pattern matching**: Detects same issue across multiple files and fixes all in one PR
+- **Duplicate PR prevention**: Title similarity matching prevents creating duplicate PRs
+
+## [0.9.0] - 2026-03-19
+
+### Added
+- **Deep finding validation**: LLM re-validates findings against full file context to filter false positives
+- **Post-PR CI monitoring**: Polls CI check runs and auto-closes PRs that fail
+- **Fuzzy search/replace matching**: Fallback matching when exact search strings don't match
+
+## [0.8.0] - 2026-03-19
+
+### Added
+- **Performance analyzer**: Detects blocking calls, string allocation, N+1 queries
+- **Refactor analyzer**: Finds unused imports, non-null assertions, encoding issues
+- **Testing analyzer**: Identifies missing test coverage opportunities
+
+### Fixed
+- CI test failures and lint formatting errors
+
+## [0.7.1] - 2026-03-19
+
+### Fixed
+- Auto-check PR template checkboxes for repos with required checklists
+- Use search/replace blocks instead of full-file replacement to preserve existing code
+
+## [0.7.0] - 2026-03-19
+
+### Added
+- **Multi-Model Agent System**: Task-based routing to different LLM models
+- **Model Tiers**: Fast models for triage, powerful models for code generation
+- **Vertex AI**: Google Cloud Vertex AI provider support
+- **Env var fallback**: Token/API key resolution from environment variables
+- **Auto-create issue**: Creates GitHub issue alongside PR for traceability
+- **Post-PR compliance loop**: Monitors PR feedback and auto-fixes
+- **Repo guidelines compliance**: Reads CONTRIBUTING.md and adapts PR format
+- 287 tests total
+
 ## [0.6.0] - 2026-03-18
 
 ### Added
@@ -17,9 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 3 new CLI commands: `interactive`, `leaderboard`, `notify-test`
 - `NotificationConfig` in config with per-channel and event-type toggles
 - `httpx` dependency for notification HTTP clients
-- 30 new tests (total: 251 tests)
 
-
+## [0.5.0] - 2026-03-18
 
 ### Added
 - **Plugin System**: Entry-point based `AnalyzerPlugin` / `GeneratorPlugin` with auto-discovery
@@ -27,12 +94,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Usage Quotas**: Daily tracking for GitHub API calls, LLM calls, and token usage
 - **API Key Auth**: `X-API-Key` header auth for dashboard mutation endpoints
 - **Docker Compose**: 3-service setup (dashboard, scheduler, runner) with shared volumes
-- Dockerfile EXPOSE 8787 + healthcheck
-- Updated README with Phase 4+5 features, Docker docs, plugin guide
-- Updated config.example.yaml with all new sections
-- 24 new tests (total: 221 tests)
-
-
 
 ## [0.4.0] - 2026-03-18
 
@@ -40,35 +101,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Web Dashboard**: FastAPI REST API + static HTML dashboard with stats, PRs, repos, run history
 - **Scheduler**: APScheduler-based cron scheduling for automated pipeline runs
 - **Parallel Processing**: `asyncio.gather` + Semaphore for concurrent repo processing (default 3)
-- **Contribution Templates**: 5 built-in YAML templates (gitignore, license, badges, type-hints, security-headers)
+- **Contribution Templates**: 5 built-in YAML templates
 - **Community Profiles**: 4 named presets (security-focused, docs-focused, full-scan, gentle)
-- **CLI Commands**: `serve`, `schedule`, `templates`, `profile <name>`
-- **Config Sections**: `SchedulerConfig`, `WebConfig`, `PipelineConfig`
-- **Memory**: `get_run_history()` endpoint for dashboard
-- **28 new tests** covering all Phase 4 modules (total: 197 tests)
-
-### Dependencies
-- `fastapi>=0.115,<1.0`
-- `uvicorn>=0.32,<1.0`
-- `apscheduler>=3.10,<4.0`
-
 
 ## [0.3.0] - 2026-03-18
 
 ### Added
 - **Issue Solver**: Classify GitHub issues by labels/keywords, filter by solvability, LLM-powered solving
-- **Framework Strategies**: Auto-detect Django, Flask, FastAPI, React/Next.js, Express with tailored analysis
-- **Quality Scorer**: 7-check quality gate before PR submission (change size, commit format, debug code, placeholders)
-- **CLI**: New `solve` command for issue-driven contributions
-- Tests: 169 total tests covering all modules
+- **Framework Strategies**: Auto-detect Django, Flask, FastAPI, React/Next.js, Express
+- **Quality Scorer**: 7-check quality gate before PR submission
 
 ## [0.2.0] - 2026-03-18
 
 ### Added
 - **Retry Utilities**: `async_retry` decorator with exponential backoff + jitter
 - **LRU Cache**: Response caching for GitHub API and LLM calls
-- **Test Suite**: 128 tests across all modules (config, models, memory, LLM, GitHub, discovery, analyzer, generator, PR manager, CLI)
-- Integration tests for pipeline dry run and analyze-only mode
+- **Test Suite**: 128 tests across all modules
 
 ## [0.1.0] - 2026-03-17
 
@@ -81,7 +129,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PR Manager**: Automated fork → branch → commit → PR workflow
 - **Memory System**: SQLite-backed persistent tracking of repos and PRs
 - **Rich CLI**: Commands: `run`, `target`, `analyze`, `status`, `stats`, `config`
-- **Team Infrastructure**: 8 agent roles, 10 workflows, CI/CD pipelines
-- **GitHub Templates**: PR template, bug/feature/security issue templates
-- **DevOps**: Dockerfile, Makefile, GitHub Actions CI/CD
-- **Documentation**: README, CONTRIBUTING, CHANGELOG, SECURITY

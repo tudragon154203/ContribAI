@@ -726,9 +726,7 @@ class ContribPipeline:
 
         for path in ai_policy_paths:
             try:
-                content = await self._github.get_file_content(
-                    repo.owner, repo.name, path
-                )
+                content = await self._github.get_file_content(repo.owner, repo.name, path)
                 if content:
                     content_lower = content.lower()
                     # Check for ban keywords
