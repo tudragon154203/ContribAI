@@ -525,12 +525,11 @@ def cleanup(ctx, yes):
                 for f in safe_to_delete:
                     console.print(f"   - {f}")
 
-                if not yes:
-                    if not click.confirm(
-                        f"\n🗑️  Delete {len(safe_to_delete)} fork(s)?", default=False
-                    ):
-                        console.print("[dim]Cancelled.[/dim]")
-                        return
+                if not yes and not click.confirm(
+                    f"\n🗑️  Delete {len(safe_to_delete)} fork(s)?", default=False
+                ):
+                    console.print("[dim]Cancelled.[/dim]")
+                    return
 
                 for f in safe_to_delete:
                     try:

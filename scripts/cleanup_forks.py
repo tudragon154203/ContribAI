@@ -7,6 +7,7 @@ NOT safe: forks with open PRs (deleting would break them).
 """
 
 import subprocess
+
 import httpx
 
 token = subprocess.check_output(["gh", "auth", "token"], text=True).strip()

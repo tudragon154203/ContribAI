@@ -246,12 +246,13 @@ class ContribPipeline:
         await self._init_components()
         total = PipelineResult()
 
+        cfg_min, cfg_max = self.config.discovery.stars_range
         star_tiers = [
+            (cfg_min, cfg_max),
             (100, 1000),
             (1000, 5000),
             (5000, 20000),
             (500, 3000),
-            (200, 2000),
         ]
         langs = list(self.config.discovery.languages)
 
