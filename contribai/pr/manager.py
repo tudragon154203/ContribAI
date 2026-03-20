@@ -34,6 +34,7 @@ class PRManager:
         target_repo: Repository,
         *,
         guidelines=None,
+        closes_issue: int | None = None,
     ) -> PRResult:
         """Create a PR from a generated contribution.
 
@@ -44,6 +45,12 @@ class PRManager:
         3b. Create a linked issue (if repo requires it)
         4. Create the pull request
         5. Check compliance and auto-fix if needed
+
+        Args:
+            contribution: Generated contribution
+            target_repo: Target repository
+            guidelines: Repo contribution guidelines
+            closes_issue: If set, adds 'Closes #N' to PR body
         """
         user = await self._get_user()
         username = user["login"]
@@ -86,8 +93,8 @@ class PRManager:
                 )
 
             # 3b. Create linked issue if repo likely requires it
-            issue_number = None
-            if guidelines and guidelines.has_guidelines:
+            issue_number = closes_issue
+            if not issue_number and guidelines and guidelines.has_guidelines:
                 issue_number = await self._create_issue_for_finding(contribution, target_repo)
 
             # 4. Create PR
@@ -103,9 +110,9 @@ class PRManager:
                 pr_body = pr_body.replace("Closes N/A", f"Closes #{issue_number}").replace(
                     "Closes #\n", f"Closes #{issue_number}\n"
                 )
-                # If no placeholder found, prepend
+                # If no placeholder found, append
                 if f"#{issue_number}" not in pr_body:
-                    pr_body = f"Closes #{issue_number}\n\n{pr_body}"
+                    pr_body += f"\n\nCloses #{issue_number}"
 
             head = f"{fork_owner}:{branch}"
 

@@ -331,6 +331,57 @@ class GitHubClient:
             },
         )
 
+    # ── Issues ─────────────────────────────────────────────────────────────
+
+    async def list_issues(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        labels: list[str] | None = None,
+        state: str = "open",
+        per_page: int = 30,
+        assignee: str = "none",
+    ) -> list[dict]:
+        """List issues on a repository.
+
+        Args:
+            owner: Repo owner
+            repo: Repo name
+            labels: Comma-separated label names to filter by
+            state: 'open', 'closed', or 'all'
+            per_page: Number of issues to return (max 100)
+            assignee: 'none' to get unassigned issues only, '*' for all
+        """
+        params: dict = {
+            "state": state,
+            "per_page": min(per_page, 100),
+            "sort": "created",
+            "direction": "desc",
+        }
+        if labels:
+            params["labels"] = ",".join(labels)
+        if assignee:
+            params["assignee"] = assignee
+
+        results = await self._get(f"/repos/{owner}/{repo}/issues", params=params)
+
+        # GitHub's issues endpoint also returns PRs — filter them out
+        return [issue for issue in results if "pull_request" not in issue]
+
+    async def get_issue_comments(self, owner: str, repo: str, issue_number: int) -> list[dict]:
+        """Get comments on an issue."""
+        return await self._get(f"/repos/{owner}/{repo}/issues/{issue_number}/comments")
+
+    async def get_issue_timeline(self, owner: str, repo: str, issue_number: int) -> list[dict]:
+        """Get timeline events for an issue (includes cross-references to PRs)."""
+        try:
+            return await self._get(
+                f"/repos/{owner}/{repo}/issues/{issue_number}/timeline",
+            )
+        except Exception:
+            return []
+
     # ── CI / Check Runs ────────────────────────────────────────────────────
 
     async def get_combined_status(self, owner: str, repo: str, ref: str) -> dict:

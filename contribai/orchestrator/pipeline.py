@@ -22,6 +22,7 @@ from contribai.generator.engine import ContributionGenerator
 from contribai.github.client import GitHubClient
 from contribai.github.discovery import RepoDiscovery
 from contribai.github.guidelines import fetch_repo_guidelines
+from contribai.issues.solver import IssueSolver
 from contribai.llm.provider import create_llm_provider
 from contribai.orchestrator.memory import Memory
 from contribai.pr.manager import PRManager
@@ -223,6 +224,7 @@ class ContribPipeline:
         rounds: int = 5,
         delay_sec: int = 30,
         dry_run: bool = False,
+        mode: str = "both",
     ) -> PipelineResult:
         """Hunt mode: aggressively discover and contribute to repos.
 
@@ -232,6 +234,12 @@ class ContribPipeline:
         2. Filter to repos that actually merge external PRs
         3. Process each repo through the full pipeline
         4. Wait between rounds to avoid rate limits
+
+        Args:
+            rounds: Number of discovery rounds
+            delay_sec: Delay between rounds
+            dry_run: If True, don't create PRs
+            mode: 'analysis' (code scan), 'issues' (issue solving), 'both'
         """
         import random
 
@@ -317,7 +325,27 @@ class ContribPipeline:
                     if remaining <= 0 and not dry_run:
                         break
                     try:
-                        rr = await self._process_repo(repo, dry_run, remaining)
+                        # Process based on mode
+                        rr = PipelineResult()
+
+                        if mode in ("analysis", "both"):
+                            analysis_rr = await self._process_repo(repo, dry_run, remaining)
+                            rr.repos_analyzed += analysis_rr.repos_analyzed
+                            rr.findings_total += analysis_rr.findings_total
+                            rr.contributions_generated += analysis_rr.contributions_generated
+                            rr.prs_created += analysis_rr.prs_created
+                            rr.prs.extend(analysis_rr.prs)
+
+                        if mode in ("issues", "both"):
+                            issue_rr = await self._process_repo_issues(
+                                repo, dry_run, remaining - rr.prs_created
+                            )
+                            rr.repos_analyzed = max(rr.repos_analyzed, issue_rr.repos_analyzed)
+                            rr.findings_total += issue_rr.findings_total
+                            rr.contributions_generated += issue_rr.contributions_generated
+                            rr.prs_created += issue_rr.prs_created
+                            rr.prs.extend(issue_rr.prs)
+
                         total.repos_analyzed += 1
                         total.findings_total += rr.findings_total
                         total.contributions_generated += rr.contributions_generated
@@ -616,6 +644,217 @@ class ContribPipeline:
 
         result.repos_analyzed = 1
         return result
+
+    async def _process_repo_issues(
+        self, repo: Repository, dry_run: bool, max_prs: int = 3
+    ) -> PipelineResult:
+        """Process a repo by solving its open Issues.
+
+        v2.0.0: Issue-driven mode. Fetches solvable issues, uses
+        solve_issue_deep() to plan multi-file changes, generates
+        contributions, and creates PRs that close issues.
+        """
+        result = PipelineResult()
+        logger.info("📋 Looking for solvable issues in %s...", repo.full_name)
+
+        # Check AI policy first
+        if await self._check_ai_policy(repo):
+            logger.warning(
+                "🚫 %s bans AI PRs, skipping issue solving.",
+                repo.full_name,
+            )
+            return result
+
+        # Initialize issue solver
+        solver = IssueSolver(llm=self._llm, github=self._github)
+
+        # Fetch solvable issues
+        issues = await solver.fetch_solvable_issues(repo, max_issues=max_prs, max_complexity=3)
+
+        if not issues:
+            logger.info("No solvable issues found in %s", repo.full_name)
+            return result
+
+        # Fetch repo guidelines
+        guidelines = await fetch_repo_guidelines(self._github, repo.owner, repo.name)
+
+        # Build repo context with more files for deeper understanding
+        file_tree = await self._github.get_file_tree(repo.owner, repo.name)
+        relevant_files: dict[str, str] = {}
+
+        # Fetch key files for context (README, main modules, etc.)
+        key_files = self._identify_key_files(file_tree, repo)
+        for fpath in key_files[:10]:
+            try:
+                content = await self._github.get_file_content(repo.owner, repo.name, fpath)
+                relevant_files[fpath] = content
+            except Exception:
+                pass
+
+        from contribai.core.models import RepoContext
+
+        context = RepoContext(
+            repo=repo,
+            file_tree=file_tree,
+            relevant_files=relevant_files,
+        )
+
+        # Process each issue
+        for issue in issues:
+            if result.prs_created >= max_prs:
+                break
+
+            logger.info(
+                "🧠 Solving issue #%d: %s",
+                issue.number,
+                issue.title,
+            )
+
+            # Deep solve → multi-file findings
+            self._set_task("analysis")
+            findings = await solver.solve_issue_deep(issue, repo, context)
+            result.findings_total += len(findings)
+
+            if not findings:
+                logger.info("Could not solve issue #%d", issue.number)
+                continue
+
+            # Fetch file contents for each finding
+            for finding in findings:
+                if finding.file_path and finding.file_path not in relevant_files:
+                    try:
+                        content = await self._github.get_file_content(
+                            repo.owner, repo.name, finding.file_path
+                        )
+                        relevant_files[finding.file_path] = content
+                        context.relevant_files[finding.file_path] = content
+                    except Exception:
+                        pass
+
+            # Generate contributions — first finding is the primary one
+            # The generator already handles multi-file via cross-file matching
+            primary = findings[0]
+            logger.info(
+                "🛠️ Generating fix for issue #%d (%d files)...",
+                issue.number,
+                len(findings),
+            )
+
+            self._set_task("code_gen")
+            contribution = await self._generator.generate(primary, context, guidelines=guidelines)
+
+            if not contribution:
+                logger.warning(
+                    "Failed to generate contribution for issue #%d",
+                    issue.number,
+                )
+                continue
+
+            result.contributions_generated += 1
+
+            if dry_run:
+                logger.info(
+                    "🏃 [DRY RUN] Would create PR for issue #%d: %s",
+                    issue.number,
+                    contribution.title,
+                )
+                continue
+
+            # Create PR with "Closes #N" in body
+            try:
+                logger.info("📤 Creating PR for issue #%d...", issue.number)
+                pr_result = await self._pr_manager.create_pr(
+                    contribution,
+                    repo,
+                    guidelines=guidelines,
+                    closes_issue=issue.number,
+                )
+                result.prs_created += 1
+                result.prs.append(pr_result)
+
+                await self._memory.record_pr(
+                    repo=repo.full_name,
+                    pr_number=pr_result.pr_number,
+                    pr_url=pr_result.pr_url,
+                    title=contribution.title,
+                    pr_type=contribution.contribution_type.value,
+                    branch=pr_result.branch_name,
+                    fork=pr_result.fork_full_name,
+                )
+
+                # Post-PR compliance
+                try:
+                    await self._pr_manager.check_compliance_and_fix(
+                        pr_result, contribution, guidelines=guidelines
+                    )
+                except Exception as e:
+                    logger.warning("Compliance check failed: %s", e)
+
+                # CI check
+                try:
+                    await self._check_ci_and_close_if_failed(pr_result, repo)
+                except Exception as e:
+                    logger.warning("CI check failed: %s", e)
+
+            except Exception as e:
+                error = f"PR creation failed for issue #{issue.number}: {e}"
+                logger.error(error)
+                result.errors.append(error)
+
+        result.repos_analyzed = 1
+        return result
+
+    def _identify_key_files(self, file_tree: list, repo: Repository) -> list[str]:
+        """Identify key files in a repo for building context.
+
+        Prioritizes: README, main entry points, config files, core modules.
+        """
+        priority_patterns = [
+            "README.md",
+            "CONTRIBUTING.md",
+            "setup.py",
+            "pyproject.toml",
+            "package.json",
+            "Cargo.toml",
+            "go.mod",
+        ]
+
+        # Collect all blob paths
+        all_files = [f.path for f in file_tree if f.type == "blob"]
+
+        key_files: list[str] = []
+
+        # Add priority files first
+        for pattern in priority_patterns:
+            for fpath in all_files:
+                if fpath.endswith(pattern) and fpath not in key_files:
+                    key_files.append(fpath)
+                    break
+
+        # Add main entry points based on language
+        lang = (repo.language or "").lower()
+        entry_patterns = {
+            "python": ["__init__.py", "main.py", "app.py", "cli.py"],
+            "javascript": ["index.js", "app.js", "server.js"],
+            "typescript": ["index.ts", "app.ts", "main.ts"],
+            "go": ["main.go", "cmd/main.go"],
+            "rust": ["main.rs", "lib.rs"],
+        }
+
+        for pat in entry_patterns.get(lang, []):
+            for fpath in all_files:
+                if fpath.endswith(pat) and fpath not in key_files:
+                    key_files.append(fpath)
+
+        # Add source files from common directories
+        src_dirs = ["src/", "lib/", "app/", "pkg/", "internal/"]
+        for fpath in all_files:
+            if len(key_files) >= 15:
+                break
+            if any(fpath.startswith(d) for d in src_dirs) and fpath not in key_files:
+                key_files.append(fpath)
+
+        return key_files[:15]
 
     async def _validate_findings(
         self,

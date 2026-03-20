@@ -155,14 +155,26 @@ def target(ctx, url, types, dry_run):
 @click.option("--rounds", "-r", type=int, default=5, help="Number of discovery rounds")
 @click.option("--delay", "-d", type=int, default=30, help="Delay (sec) between rounds")
 @click.option("--language", "-l", multiple=True, help="Filter by language(s)")
+@click.option(
+    "--mode",
+    "-m",
+    type=click.Choice(["analysis", "issues", "both"]),
+    default="both",
+    help="Hunt mode: analysis (code scan), issues (solve issues), both",
+)
 @click.option("--dry-run", is_flag=True, help="Analyze without creating PRs")
 @click.pass_context
-def hunt(ctx, rounds, delay, language, dry_run):
+def hunt(ctx, rounds, delay, language, mode, dry_run):
     """🔥 Hunt mode: auto-discover repos and contribute aggressively.
 
     Searches GitHub for high-star, active repos that merge external PRs,
     then runs the full pipeline on each. Loops through multiple rounds
     with varied criteria for maximum coverage.
+
+    Modes:
+      analysis - Code pattern scanning only (original behavior)
+      issues   - Solve open GitHub issues (v2.0.0)
+      both     - Do both (default)
     """
     print_banner()
 
@@ -179,8 +191,9 @@ def hunt(ctx, rounds, delay, language, dry_run):
         console.print("[red]❌ LLM API key not configured![/red]")
         sys.exit(1)
 
-    mode = "[yellow]DRY RUN[/yellow]" if dry_run else "[red]LIVE 🔥[/red]"
-    console.print(f"\n🔥 Hunt Mode ({mode})")
+    mode_label = "[yellow]DRY RUN[/yellow]" if dry_run else "[red]LIVE 🔥[/red]"
+    console.print(f"\n🔥 Hunt Mode ({mode_label})")
+    console.print(f"   Mode: {mode}")
     console.print(f"   Rounds: {rounds}")
     console.print(f"   Delay: {delay}s between rounds")
     console.print(f"   Languages: {', '.join(config.discovery.languages)}")
@@ -190,7 +203,7 @@ def hunt(ctx, rounds, delay, language, dry_run):
     from contribai.orchestrator.pipeline import ContribPipeline
 
     pipeline = ContribPipeline(config)
-    result = asyncio.run(pipeline.hunt(rounds=rounds, delay_sec=delay, dry_run=dry_run))
+    result = asyncio.run(pipeline.hunt(rounds=rounds, delay_sec=delay, dry_run=dry_run, mode=mode))
     _print_result(result, dry_run)
 
 
