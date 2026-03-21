@@ -355,44 +355,31 @@ class ContribPipeline:
                     continue
 
                 max_targets = self.config.github.max_repos_per_run
-                for repo in targets[:max_targets]:
-                    if remaining <= 0 and not dry_run:
-                        break
-                    try:
-                        # Process based on mode
-                        rr = PipelineResult()
+                max_conc = self.config.pipeline.max_concurrent_repos
+                sem = asyncio.Semaphore(max_conc)
+                selected = targets[:max_targets]
 
-                        if mode in ("analysis", "both"):
-                            analysis_rr = await self._process_repo(repo, dry_run, remaining)
-                            rr.repos_analyzed += analysis_rr.repos_analyzed
-                            rr.findings_total += analysis_rr.findings_total
-                            rr.contributions_generated += analysis_rr.contributions_generated
-                            rr.prs_created += analysis_rr.prs_created
-                            rr.prs.extend(analysis_rr.prs)
+                logger.info(
+                    "Processing %d repos (max %d concurrent)",
+                    len(selected),
+                    max_conc,
+                )
 
-                        if mode in ("issues", "both"):
-                            issue_rr = await self._process_repo_issues(
-                                repo, dry_run, remaining - rr.prs_created
-                            )
-                            rr.repos_analyzed = max(rr.repos_analyzed, issue_rr.repos_analyzed)
-                            rr.findings_total += issue_rr.findings_total
-                            rr.contributions_generated += issue_rr.contributions_generated
-                            rr.prs_created += issue_rr.prs_created
-                            rr.prs.extend(issue_rr.prs)
+                repo_results = await asyncio.gather(
+                    *[
+                        self._hunt_process_repo(repo, mode, dry_run, remaining, sem)
+                        for repo in selected
+                    ]
+                )
 
-                        total.repos_analyzed += 1
-                        total.findings_total += rr.findings_total
-                        total.contributions_generated += rr.contributions_generated
-                        total.prs_created += rr.prs_created
-                        total.prs.extend(rr.prs)
-                        remaining -= rr.prs_created
-                    except Exception as e:
-                        total.errors.append(f"{repo.full_name}: {e}")
-                        logger.error(
-                            "Error processing %s: %s",
-                            repo.full_name,
-                            e,
-                        )
+                for rr in repo_results:
+                    total.repos_analyzed += rr.repos_analyzed
+                    total.findings_total += rr.findings_total
+                    total.contributions_generated += rr.contributions_generated
+                    total.prs_created += rr.prs_created
+                    total.prs.extend(rr.prs)
+                    total.errors.extend(rr.errors)
+                    remaining -= rr.prs_created
 
                 if rnd < rounds:
                     logger.info(
@@ -405,6 +392,42 @@ class ContribPipeline:
             await self._cleanup()
 
         return total
+
+    async def _hunt_process_repo(
+        self,
+        repo: Repository,
+        mode: str,
+        dry_run: bool,
+        remaining: int,
+        sem: asyncio.Semaphore,
+    ) -> PipelineResult:
+        """Process a single repo in hunt mode (used for parallel execution)."""
+        async with sem:
+            rr = PipelineResult()
+            try:
+                if mode in ("analysis", "both"):
+                    analysis_rr = await self._process_repo(repo, dry_run, remaining)
+                    rr.repos_analyzed += analysis_rr.repos_analyzed
+                    rr.findings_total += analysis_rr.findings_total
+                    rr.contributions_generated += analysis_rr.contributions_generated
+                    rr.prs_created += analysis_rr.prs_created
+                    rr.prs.extend(analysis_rr.prs)
+
+                if mode in ("issues", "both"):
+                    issue_rr = await self._process_repo_issues(
+                        repo, dry_run, remaining - rr.prs_created
+                    )
+                    rr.repos_analyzed = max(rr.repos_analyzed, issue_rr.repos_analyzed)
+                    rr.findings_total += issue_rr.findings_total
+                    rr.contributions_generated += issue_rr.contributions_generated
+                    rr.prs_created += issue_rr.prs_created
+                    rr.prs.extend(issue_rr.prs)
+
+                rr.repos_analyzed = max(rr.repos_analyzed, 1)
+            except Exception as e:
+                rr.errors.append(f"{repo.full_name}: {e}")
+                logger.error("Error processing %s: %s", repo.full_name, e)
+            return rr
 
     async def run_single(
         self,
