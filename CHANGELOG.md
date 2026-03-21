@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-03-22
+
+### Added
+- **Smart Context Builder**: `_detect_project_profile()` auto-detects project type (library, web_app, api_server, cli_tool, data_pipeline), tech stack (Django, Flask, FastAPI, etc.), and conventions (tests, CI, type hints)
+- **Style Guide Extraction**: `_build_style_guide()` analyzes source code to detect naming conventions, error handling, docstring format, import style, and logging patterns
+- **Score-based File Prioritization**: `_prioritize_files()` ranks files by contribution value (entry points +40, API routes +35, auth/security +30, config +20) with penalties for tests, vendor, and deeply nested files
+- **Anti-false-positive Rules**: 5 mandatory checks before reporting findings — ALREADY_HANDLED, BY_DESIGN, BOUNDED_CONTEXT, TRIVIAL_FIX, COSMETIC
+- **Pre-generation Validation**: Early filter skips findings targeting non-code files (SKIP_EXTENSIONS) and protected meta files before expensive LLM code generation
+- **Maintainer Acceptance Gate**: Generation prompt includes "30-second merge test" criteria
+
+### Changed
+- Analyzer system prompt upgraded from generic "expert code analyst" to "senior software engineer performing focused code review" with project profile injection
+- Security prompt now focuses on real exploitability: SQL injection only for raw queries (not ORM), hardcoded secrets only outside test fixtures
+- Code quality prompt focuses on bugs/crashes: unhandled None, resource leaks, race conditions, off-by-one errors
+- Performance prompt requires >10% measurable impact; skips micro-optimizations
+- Max 3 findings per analyzer (quality over quantity)
+- Generator system prompt includes style guide injection and 8 explicit rules (no adjacent refactoring, no comments, no unrelated files)
+
 ## [2.0.0] - 2026-03-22
 
 ### Added
