@@ -6,8 +6,8 @@ ContribAI discovers open source repositories, analyzes them for improvement oppo
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-333%20passed-brightgreen)](#)
-[![Version](https://img.shields.io/badge/version-2.4.1-blue)](#)
+[![Tests](https://img.shields.io/badge/tests-370%2B%20passed-brightgreen)](#)
+[![Version](https://img.shields.io/badge/version-2.6.0-blue)](#)
 
 ---
 
@@ -26,7 +26,8 @@ ContribAI discovers open source repositories, analyzes them for improvement oppo
 
 ### Hunt Mode (v0.11.0+)
 - **Autonomous hunting** – Discovers repos across GitHub and creates PRs at scale
-- **Parallel processing** – `asyncio.gather` + semaphore for concurrent repo analysis (v2.0)
+- **Sequential processing** – Configurable inter-repo delay to avoid API rate limits (v2.6.0)
+- **Code validation** – Pre-self-review syntax checks (empty edits, no-ops, balanced brackets)
 - **Multi-round** – Runs N rounds with configurable delay between rounds
 - **Cross-file fixes** – Detects the same pattern across multiple files and fixes all at once
 - **Duplicate prevention** – Title similarity matching prevents duplicate PRs
@@ -55,6 +56,14 @@ ContribAI discovers open source repositories, analyzes them for improvement oppo
 - **DCO auto-signoff** – Automatically appends `Signed-off-by` to all commits
 - **Bot filtering** – Filters 11+ known review bots to avoid false feedback classification
 
+### MCP Server (v2.6.0)
+- **14 MCP tools** – Expose ContribAI to Claude Desktop via stdio protocol
+- **GitHub Read** – search_repos, get_repo_info, get_file_tree, get_file_content, get_open_issues
+- **GitHub Write** – fork_repo, create_branch, push_file_change, create_pr, close_pr
+- **Safety** – check_duplicate_pr, check_ai_policy
+- **Maintenance** – patrol_prs, cleanup_forks, get_stats
+- **Resource safe** – Proper cleanup on shutdown, fork delete guard
+
 ### Multi-Model Agent (v0.7.0+)
 - **Task routing** – Routes analysis/generation/review to different models
 - **Model tiers** – Fast models for triage, powerful for generation
@@ -81,7 +90,7 @@ ContribAI discovers open source repositories, analyzes them for improvement oppo
      │                                  │
      ▼                                  ▼
   GitHub         ┌──────────Sub-Agent Registry──────────┐
-  Search         │  Analyzer │ Generator │ Patrol │ Compliance │
+  Search         │  Analyzer │ Generator │ Patrol │ Compliance │ MCP │
   + Hunt         └────┬──────────┬──────────┬────────┬──┘
   + Webhooks          │          │          │        │
                  ┌────▼────┐ ┌───▼───┐ ┌───▼───┐ ┌─▼──┐
@@ -225,6 +234,7 @@ contribai/
 ├── analysis/          # 7 analyzers + progressive skill loading (17 skills)
 ├── agents/            # Sub-agent registry (Analyzer, Generator, Patrol, Compliance)
 ├── tools/             # MCP-inspired tool protocol (GitHubTool, LLMTool)
+├── mcp_server.py      # MCP stdio server (14 tools for Claude Desktop)
 ├── generator/         # Contribution generator + self-review + quality scorer
 ├── issues/            # Issue-driven contribution solver
 ├── pr/                # PR lifecycle manager + patrol + CLA handler
@@ -245,7 +255,7 @@ AGENTS.md              # AI agent guide (for Copilot, Claude, Coderabbit, etc.)
 ## Testing
 
 ```bash
-pytest tests/ -v                  # Run all 247 tests
+pytest tests/ -v                  # Run all 370+ tests
 pytest tests/ -v --cov=contribai  # With coverage
 ruff check contribai/             # Lint
 ruff format contribai/            # Format
