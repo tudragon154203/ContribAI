@@ -388,7 +388,7 @@ class ContribPipeline:
         ]
         langs = list(self.config.discovery.languages)
         # v4.0: Multi-language expansion — add extra languages for broader reach
-        all_languages = list(set(langs + ["javascript", "typescript", "go", "rust"]))
+        all_languages = list(set([*langs, "javascript", "typescript", "go", "rust"]))
 
         try:
             for rnd in range(1, rounds + 1):
@@ -587,13 +587,8 @@ class ContribPipeline:
         for lang in languages[:2]:
             for label in ["good first issue", "help wanted", "bug"]:
                 try:
-                    query = (
-                        f'label:"{label}" language:{lang} state:open '
-                        f"stars:>100 archived:false"
-                    )
-                    issues = await self._github.search_issues(
-                        query, sort="created", per_page=10
-                    )
+                    query = f'label:"{label}" language:{lang} state:open stars:>100 archived:false'
+                    issues = await self._github.search_issues(query, sort="created", per_page=10)
 
                     for issue_data in issues[:max_issues]:
                         repo_url = issue_data.get("repository_url", "")
@@ -763,12 +758,9 @@ class ContribPipeline:
         if past_prs:
             pr_lines = []
             for pr in past_prs[:10]:
-                pr_lines.append(
-                    f"  - [{pr.get('status', '?')}] {pr.get('title', '?')}"
-                )
+                pr_lines.append(f"  - [{pr.get('status', '?')}] {pr.get('title', '?')}")
             pr_history_context = (
-                "\n\nPREVIOUSLY SUBMITTED PRs (DO NOT repeat these):\n"
-                + "\n".join(pr_lines)
+                "\n\nPREVIOUSLY SUBMITTED PRs (DO NOT repeat these):\n" + "\n".join(pr_lines)
             )
             logger.info(
                 "🔁 Injected %d past PRs into analysis context",

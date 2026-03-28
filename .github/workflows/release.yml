@@ -22,8 +22,22 @@ jobs:
         run: python -m build
       - name: Check package
         run: twine check dist/*
+      - name: Extract release notes from CHANGELOG
+        id: changelog
+        run: |
+          # Extract the section for this tag's version from CHANGELOG.md
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "Extracting notes for version $TAG"
+          # Get content between this version header and the next version header
+          NOTES=$(awk "/^## \[$TAG\]/{found=1; next} /^## \[/{if(found) exit} found" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release $TAG — see [CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/main/CHANGELOG.md) for details."
+          fi
+          # Write to file to avoid escaping issues
+          echo "$NOTES" > /tmp/release_notes.md
+          echo "notes_file=/tmp/release_notes.md" >> $GITHUB_OUTPUT
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
+          body_path: ${{ steps.changelog.outputs.notes_file }}

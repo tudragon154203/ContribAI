@@ -705,34 +705,6 @@ class GitHubClient:
         data = await self._get("/search/issues", params=params)
         return data.get("items", []) if isinstance(data, dict) else []
 
-    async def close_issue(
-        self,
-        owner: str,
-        repo: str,
-        issue_number: int,
-        *,
-        comment: str = "",
-    ) -> None:
-        """Close an issue with an optional comment.
-
-        Args:
-            owner: Repository owner.
-            repo: Repository name.
-            issue_number: Issue number to close.
-            comment: Optional comment to post before closing.
-        """
-        if comment:
-            await self._post(
-                f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
-                json={"body": comment},
-            )
-        await self._request(
-            "PATCH",
-            f"/repos/{owner}/{repo}/issues/{issue_number}",
-            json={"state": "closed", "state_reason": "not_planned"},
-        )
-        logger.info("Closed issue #%d on %s/%s", issue_number, owner, repo)
-
     @staticmethod
     def _parse_repo(data: dict) -> Repository:
         """Parse raw API response into Repository model."""

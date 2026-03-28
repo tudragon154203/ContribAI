@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 from contribai.github.client import GitHubClient
 
@@ -63,7 +64,7 @@ class RepoIntelligence:
     """Gather intelligence about a repo before contributing."""
 
     # Classify PR titles into contribution types
-    TYPE_KEYWORDS = {
+    TYPE_KEYWORDS: ClassVar[dict[str, list[str]]] = {
         "security": ["security", "vulnerability", "cve", "xss", "injection", "auth"],
         "bug_fix": ["fix", "bug", "crash", "error", "issue", "broken", "null", "none"],
         "test": ["test", "coverage", "spec", "unittest", "pytest"],
@@ -76,7 +77,7 @@ class RepoIntelligence:
     }
 
     # Issue labels that indicate high-value contribution opportunities
-    HIGH_VALUE_LABELS = {
+    HIGH_VALUE_LABELS: ClassVar[set[str]] = {
         "good first issue",
         "help wanted",
         "bug",
@@ -106,9 +107,7 @@ class RepoIntelligence:
 
         # 1. Analyze recently merged PRs
         try:
-            merged_types, rejected_types, avg_hours = await self._analyze_pr_history(
-                owner, repo
-            )
+            merged_types, rejected_types, avg_hours = await self._analyze_pr_history(owner, repo)
             profile.merged_pr_types = merged_types
             profile.preferred_types = list(set(merged_types))
             profile.rejected_types = list(set(rejected_types))
@@ -141,9 +140,7 @@ class RepoIntelligence:
         Returns:
             Tuple of (merged_types, rejected_types, avg_review_hours).
         """
-        prs = await self._github.list_pull_requests(
-            owner, repo, state="closed", per_page=30
-        )
+        prs = await self._github.list_pull_requests(owner, repo, state="closed", per_page=30)
 
         merged_types: list[str] = []
         rejected_types: list[str] = []
@@ -177,9 +174,7 @@ class RepoIntelligence:
         'help wanted', 'bug'.
         """
         try:
-            issues = await self._github.get_issues(
-                owner, repo, state="open", per_page=30
-            )
+            issues = await self._github.get_issues(owner, repo, state="open", per_page=30)
         except Exception:
             return []
 
@@ -202,13 +197,15 @@ class RepoIntelligence:
             score += reactions.get("total_count", 0) if isinstance(reactions, dict) else 0
 
             if score > 0:
-                actionable.append({
-                    "number": issue["number"],
-                    "title": issue.get("title", ""),
-                    "labels": labels,
-                    "score": score,
-                    "comments": issue.get("comments", 0),
-                })
+                actionable.append(
+                    {
+                        "number": issue["number"],
+                        "title": issue.get("title", ""),
+                        "labels": labels,
+                        "score": score,
+                        "comments": issue.get("comments", 0),
+                    }
+                )
 
         # Sort by score descending
         actionable.sort(key=lambda x: x["score"], reverse=True)

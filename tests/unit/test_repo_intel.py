@@ -13,59 +13,63 @@ from contribai.analysis.repo_intel import RepoIntelligence, RepoProfile
 def mock_github():
     """Create a mock GitHub client."""
     client = MagicMock()
-    client.list_pull_requests = AsyncMock(return_value=[
-        {
-            "title": "Fix null pointer in parser",
-            "merged_at": "2026-03-20T10:00:00Z",
-            "created_at": "2026-03-19T08:00:00Z",
-        },
-        {
-            "title": "Add unit tests for auth module",
-            "merged_at": "2026-03-18T14:00:00Z",
-            "created_at": "2026-03-17T10:00:00Z",
-        },
-        {
-            "title": "Update README badges",
-            "merged_at": None,  # closed, not merged
-            "created_at": "2026-03-15T10:00:00Z",
-        },
-        {
-            "title": "refactor: simplify config loader",
-            "merged_at": "2026-03-14T12:00:00Z",
-            "created_at": "2026-03-14T08:00:00Z",
-        },
-    ])
-    client.get_issues = AsyncMock(return_value=[
-        {
-            "number": 42,
-            "title": "Crash on empty input",
-            "labels": [{"name": "bug"}, {"name": "good first issue"}],
-            "reactions": {"total_count": 5},
-            "comments": 3,
-        },
-        {
-            "number": 43,
-            "title": "Feature request: dark mode",
-            "labels": [{"name": "enhancement"}],
-            "reactions": {"total_count": 2},
-            "comments": 1,
-        },
-        {
-            "number": 44,
-            "title": "Regular issue",
-            "labels": [],
-            "reactions": {"total_count": 0},
-            "comments": 0,
-        },
-        {
-            "number": 45,
-            "title": "This is actually a PR",
-            "pull_request": {"url": "..."},  # should be filtered
-            "labels": [{"name": "bug"}],
-            "reactions": {"total_count": 10},
-            "comments": 5,
-        },
-    ])
+    client.list_pull_requests = AsyncMock(
+        return_value=[
+            {
+                "title": "Fix null pointer in parser",
+                "merged_at": "2026-03-20T10:00:00Z",
+                "created_at": "2026-03-19T08:00:00Z",
+            },
+            {
+                "title": "Add unit tests for auth module",
+                "merged_at": "2026-03-18T14:00:00Z",
+                "created_at": "2026-03-17T10:00:00Z",
+            },
+            {
+                "title": "Update README badges",
+                "merged_at": None,  # closed, not merged
+                "created_at": "2026-03-15T10:00:00Z",
+            },
+            {
+                "title": "refactor: simplify config loader",
+                "merged_at": "2026-03-14T12:00:00Z",
+                "created_at": "2026-03-14T08:00:00Z",
+            },
+        ]
+    )
+    client.get_issues = AsyncMock(
+        return_value=[
+            {
+                "number": 42,
+                "title": "Crash on empty input",
+                "labels": [{"name": "bug"}, {"name": "good first issue"}],
+                "reactions": {"total_count": 5},
+                "comments": 3,
+            },
+            {
+                "number": 43,
+                "title": "Feature request: dark mode",
+                "labels": [{"name": "enhancement"}],
+                "reactions": {"total_count": 2},
+                "comments": 1,
+            },
+            {
+                "number": 44,
+                "title": "Regular issue",
+                "labels": [],
+                "reactions": {"total_count": 0},
+                "comments": 0,
+            },
+            {
+                "number": 45,
+                "title": "This is actually a PR",
+                "pull_request": {"url": "..."},  # should be filtered
+                "labels": [{"name": "bug"}],
+                "reactions": {"total_count": 10},
+                "comments": 5,
+            },
+        ]
+    )
     return client
 
 
