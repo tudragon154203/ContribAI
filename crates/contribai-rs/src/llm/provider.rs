@@ -89,11 +89,26 @@ fn fetch_gcloud_token() -> Result<String> {
 
 // ── Gemini Provider (primary) ─────────────────────────────────────────────────
 
+/// Cached Vertex AI access token — avoids calling gcloud per-request.
+/// Token expires after 1h; we refresh at 55 minutes.
+struct TokenCache {
+    token: String,
+    fetched_at: std::time::Instant,
+}
+
+impl TokenCache {
+    fn is_fresh(&self) -> bool {
+        self.fetched_at.elapsed() < std::time::Duration::from_secs(55 * 60)
+    }
+}
+
 /// Google Gemini provider — primary/default.
 ///
 /// Supports both API key auth and Vertex AI (Google Cloud).
 /// When `vertex_project` is set in config, uses `gcloud auth print-access-token`
 /// and routes to the Vertex AI endpoint (no API key needed).
+///
+/// v5.2: Token cached for 55 minutes to avoid per-request gcloud calls.
 pub struct GeminiProvider {
     client: Client,
     /// Non-empty for API key auth; empty for Vertex AI.
@@ -104,6 +119,8 @@ pub struct GeminiProvider {
     /// Non-empty when using Vertex AI.
     vertex_project: String,
     vertex_location: String,
+    /// Cached Vertex AI token (55-min TTL). None = not yet fetched or key-auth mode.
+    token_cache: std::sync::Arc<std::sync::Mutex<Option<TokenCache>>>,
 }
 
 impl GeminiProvider {
@@ -113,7 +130,7 @@ impl GeminiProvider {
             info!(
                 model = %config.model,
                 project = %config.vertex_project,
-                "Gemini via Vertex AI"
+                "Gemini via Vertex AI (token cached 55 min)"
             );
             return Ok(Self {
                 client: Client::new(),
@@ -123,6 +140,7 @@ impl GeminiProvider {
                 max_tokens: config.max_tokens,
                 vertex_project: config.vertex_project.clone(),
                 vertex_location: config.vertex_location.clone(),
+                token_cache: std::sync::Arc::new(std::sync::Mutex::new(None)),
             });
         }
 
@@ -144,7 +162,25 @@ impl GeminiProvider {
             max_tokens: config.max_tokens,
             vertex_project: String::new(),
             vertex_location: String::new(),
+            token_cache: std::sync::Arc::new(std::sync::Mutex::new(None)),
         })
+    }
+
+    /// Get a Vertex AI access token, using cache if still fresh.
+    fn get_cached_token(&self) -> Result<String> {
+        let mut cache = self.token_cache.lock().unwrap();
+        if let Some(ref tc) = *cache {
+            if tc.is_fresh() {
+                return Ok(tc.token.clone());
+            }
+        }
+        // Cache miss or expired — fetch fresh token
+        let token = fetch_gcloud_token()?;
+        *cache = Some(TokenCache {
+            token: token.clone(),
+            fetched_at: std::time::Instant::now(),
+        });
+        Ok(token)
     }
 
     /// Build the request URL and auth header.
@@ -156,7 +192,7 @@ impl GeminiProvider {
                 "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:generateContent",
                 self.vertex_location, self.vertex_project, self.vertex_location, self.model
             );
-            let token = fetch_gcloud_token()?;
+            let token = self.get_cached_token()?;
             Ok((url, Some(token)))
         } else {
             let url = format!(

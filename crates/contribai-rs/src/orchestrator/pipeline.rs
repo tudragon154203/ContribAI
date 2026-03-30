@@ -857,7 +857,7 @@ impl<'a> ContribPipeline<'a> {
                             Ok(pr_result) => {
                                 result.prs_created += 1;
 
-                                // ── v5.1: Record outcome for learning ──
+                                // ── v5.1: Record PR for dedup ──────────────
                                 self.memory.record_pr(
                                     &repo.full_name,
                                     pr_result.pr_number,
@@ -868,6 +868,19 @@ impl<'a> ContribPipeline<'a> {
                                     &pr_result.fork_full_name,
                                 )?;
 
+                                // ── v5.2: Outcome learning — initial status ─
+                                if let Err(e) = self.memory.record_outcome(
+                                    &repo.full_name,
+                                    pr_result.pr_number,
+                                    &pr_result.pr_url,
+                                    &contribution.contribution_type.to_string(),
+                                    "open",           // updated later by patrol
+                                    &pr_result.branch_name,
+                                    0.0,              // merge time unknown yet
+                                ) {
+                                    debug!("Outcome record failed (non-fatal): {}", e);
+                                }
+
                                 self.event_bus.emit(
                                     Event::new(EventType::PrCreated, "pipeline.process_repo")
                                         .with_data("pr_number", pr_result.pr_number)
@@ -877,7 +890,7 @@ impl<'a> ContribPipeline<'a> {
                                 info!(
                                     pr = pr_result.pr_number,
                                     url = %pr_result.pr_url,
-                                    "✅ PR created"
+                                    "✅ PR created + outcome recorded"
                                 );
                             }
                             Err(e) => {
@@ -905,7 +918,7 @@ impl<'a> ContribPipeline<'a> {
     async fn process_repo_issues(
         &self,
         repo: &Repository,
-        dry_run: bool,
+        _dry_run: bool,
         max_prs: usize,
         _ctx: &PipelineContext,
     ) -> Result<PipelineResult> {

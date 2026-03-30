@@ -549,6 +549,113 @@ impl<'a> PrPatrol<'a> {
     }
 }
 
+// ── CI Monitor ────────────────────────────────────────────────────────────────
+
+/// Outcome of a CI monitoring session.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CiOutcome {
+    /// All checks passed.
+    Passed,
+    /// One or more checks failed.
+    Failed(Vec<String>),
+    /// Monitoring timed out before CI completed.
+    Timeout,
+    /// No CI checks found (repo doesn't use CI).
+    NoCi,
+}
+
+impl<'a> PrPatrol<'a> {
+    /// Monitor CI status for a PR after submission.
+    ///
+    /// Polls check-runs every `poll_interval_secs` until all checks complete
+    /// or `timeout_mins` is reached. Returns the final CI outcome.
+    ///
+    /// Python equivalent: `pr/patrol.py:monitor_ci_status()`
+    pub async fn monitor_pr_ci(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+        timeout_mins: u64,
+        poll_interval_secs: u64,
+    ) -> CiOutcome {
+        let deadline = std::time::Instant::now()
+            + std::time::Duration::from_secs(timeout_mins * 60);
+        let poll = std::time::Duration::from_secs(poll_interval_secs);
+
+        info!(
+            owner, repo,
+            sha = &sha[..8.min(sha.len())],
+            timeout_mins,
+            "🔍 CI Monitor started"
+        );
+
+        loop {
+            match self.github.get_combined_status(owner, repo, sha).await {
+                Ok(ci) => {
+                    if ci.total == 0 {
+                        info!(owner, repo, "⚡ No CI checks — skipping monitor");
+                        return CiOutcome::NoCi;
+                    }
+
+                    if !ci.in_progress.is_empty() {
+                        info!(
+                            running = ci.in_progress.len(),
+                            passed = ci.passed.len(),
+                            "⏳ CI still running"
+                        );
+                    } else if !ci.failed.is_empty() {
+                        warn!(failed = ?ci.failed, "❌ CI failed");
+                        return CiOutcome::Failed(ci.failed);
+                    } else {
+                        info!(passed = ci.passed.len(), "✅ CI passed");
+                        return CiOutcome::Passed;
+                    }
+                }
+                Err(e) => {
+                    warn!(error = %e, "CI status check failed — retrying");
+                }
+            }
+
+            if std::time::Instant::now() >= deadline {
+                warn!(timeout_mins, "⏰ CI monitor timed out");
+                return CiOutcome::Timeout;
+            }
+
+            tokio::time::sleep(poll).await;
+        }
+    }
+
+    /// Monitor CI and record outcome into memory.
+    ///
+    /// Intended to be called after PR creation (in background or patrol cycle).
+    /// Updates `memory.update_pr_status()` once CI resolves.
+    pub async fn monitor_and_record(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+        pr_number: i64,
+        memory: &crate::orchestrator::memory::Memory,
+    ) {
+        let outcome = self.monitor_pr_ci(owner, repo, sha, 30, 60).await;
+
+        let status = match &outcome {
+            CiOutcome::Passed => "ci_passed",
+            CiOutcome::Failed(_) => "ci_failed",
+            CiOutcome::Timeout => "ci_timeout",
+            CiOutcome::NoCi => "open",
+        };
+
+        let full_name = format!("{}/{}", owner, repo);
+        if let Err(e) = memory.update_pr_status(&full_name, pr_number, status) {
+            warn!(pr = pr_number, error = %e, "Failed to update PR status after CI");
+        } else {
+            info!(pr = pr_number, status, "📝 PR status updated post-CI");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -596,5 +703,49 @@ mod tests {
         assert!(bots.contains(&"coderabbitai"));
         assert!(bots.contains(&"dependabot"));
         assert!(!bots.contains(&"real-user"));
+    }
+
+    // ── Sprint 2: CI Monitor tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_ci_outcome_variants() {
+        // Passed
+        let o = CiOutcome::Passed;
+        assert_eq!(o, CiOutcome::Passed);
+
+        // Failed with names
+        let o = CiOutcome::Failed(vec!["lint".into(), "test".into()]);
+        if let CiOutcome::Failed(names) = o {
+            assert_eq!(names.len(), 2);
+            assert!(names.contains(&"lint".to_string()));
+        } else {
+            panic!("Expected Failed variant");
+        }
+
+        // Timeout
+        assert_eq!(CiOutcome::Timeout, CiOutcome::Timeout);
+
+        // NoCi
+        assert_eq!(CiOutcome::NoCi, CiOutcome::NoCi);
+    }
+
+    #[test]
+    fn test_ci_outcome_status_mapping() {
+        // Verify the status strings match what memory.update_pr_status() expects
+        let statuses = [
+            (CiOutcome::Passed, "ci_passed"),
+            (CiOutcome::Failed(vec![]), "ci_failed"),
+            (CiOutcome::Timeout, "ci_timeout"),
+            (CiOutcome::NoCi, "open"),
+        ];
+        for (outcome, expected) in statuses {
+            let status = match &outcome {
+                CiOutcome::Passed => "ci_passed",
+                CiOutcome::Failed(_) => "ci_failed",
+                CiOutcome::Timeout => "ci_timeout",
+                CiOutcome::NoCi => "open",
+            };
+            assert_eq!(status, expected, "Outcome {:?} should map to '{}'", outcome, expected);
+        }
     }
 }
