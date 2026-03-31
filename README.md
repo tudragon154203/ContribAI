@@ -1,11 +1,11 @@
 # ContribAI
 
-> **AI Agent that automatically contributes to open source projects on GitHub**
+> **Autonomous AI agent that discovers, analyzes, and submits Pull Requests to open source projects on GitHub**
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-431%20passed-brightgreen)](#testing)
-[![Version](https://img.shields.io/badge/version-4.1.0-blue)](https://github.com/tang-vu/ContribAI/releases)
+[![Tests](https://img.shields.io/badge/tests-335%20passed-brightgreen)](#testing)
+[![Version](https://img.shields.io/badge/version-5.1.0-blue)](https://github.com/tang-vu/ContribAI/releases)
 
 ### 🏆 Results
 
@@ -13,81 +13,92 @@
 |--------|-------|
 | **PRs Submitted** | 43+ |
 | **PRs Merged** | 9 |
-| **PRs Closed** | 14 |
 | **Repos Contributed** | 21+ |
 | **Notable Repos** | Worldmonitor (45k⭐), Maigret (19k⭐), AI-Research-SKILLs (6k⭐), s-tui (5k⭐) |
 
 > Set it up once, wake up to merged PRs. See the [**Hall of Fame →**](HALL_OF_FAME.md)
 
-ContribAI discovers open source repositories, analyzes code for improvements, generates fixes, and submits Pull Requests — all autonomously.
+ContribAI discovers open source repos, analyzes code for improvements, generates fixes, and submits Pull Requests — all autonomously. **v5.1.0 is written in Rust** for ~10–50× faster analysis and a ~4.5 MB single binary.
 
 ```
   ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
   │ Discovery│───▶│ Analysis │───▶│Generator │───▶│ PR + CI  │───▶│ Patrol   │
-  │          │    │ 20 skills│    │ LLM +    │    │ Fork,    │    │ Auto-fix │
+  │          │    │ 17 skills│    │ LLM +    │    │ Fork,    │    │ Auto-fix │
   │ Find repos│    │ Security │    │ self-    │    │ commit,  │    │ review   │
   │ by lang, │    │ quality, │    │ review,  │    │ create   │    │ feedback │
   │ stars    │    │ perf     │    │ scoring  │    │ PR + CLA │    │ & reply  │
   └──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
 ```
 
-**Safety:** Quality gate (7-check scorer), duplicate detection, AI policy respect, CI monitoring, rate limiting, dry-run mode
-
 ## Quick Start
 
 ```bash
-# Install
+# Install (single binary, no runtime required)
 git clone https://github.com/tang-vu/ContribAI.git
 cd ContribAI
-pip install -e ".[dev]"
+cargo install --path crates/contribai-rs
 
 # Configure
-cp config.example.yaml config.yaml
+cp config.yaml.template config.yaml
 # Edit config.yaml with your GitHub token + LLM API key
 
 # Run
 contribai hunt              # Autonomous: discover repos → analyze → PR
 contribai target <repo_url> # Target a specific repo
-contribai run --dry-run     # Preview without creating PRs
+contribai hunt --dry-run    # Preview without creating PRs
+contribai interactive       # Browse PRs/repos in ratatui TUI
 ```
 
 ## Features
 
 | Category | Highlights |
 |----------|-----------|
-| **Analysis** | Security (secrets, SQLi, XSS), code quality, performance, docs, UI/UX, refactoring |
+| **Analysis** | Security (SQLi, XSS, resource leak), code quality, performance, docs, complexity |
 | **LLM** | Gemini, OpenAI, Anthropic, Ollama, Vertex AI — smart task routing across model tiers |
-| **Hunt Mode** | Multi-round autonomous hunting, cross-file fixes, inter-repo delay |
-| **PR Patrol** | Monitors PRs for review feedback, auto-responds and pushes code fixes |
-| **MCP Server** | 14 tools for Claude Desktop + Antigravity IDE via stdio protocol |
+| **Hunt Mode** | Multi-round autonomous hunting, issue-first strategy, cross-file fixes |
+| **PR Patrol** | Monitors PRs for review feedback, auto-responds and pushes fixes |
+| **Interactive TUI** | ratatui 4-tab browser: Dashboard / PRs / Repos / Actions |
+| **MCP Server** | 21 tools for Claude Desktop via stdio JSON-RPC |
 | **Safety** | AI policy detection, CLA auto-signing, quality gate, duplicate prevention |
-| **Platform** | Web dashboard, scheduler, webhooks, Docker, profiles, plugins |
-| **Notifications** | Slack, Discord, Telegram with retry |
+| **Platform** | Web dashboard (axum), scheduler, webhooks, Docker, profiles, plugins |
+| **Notifications** | Real HTTP to Slack, Discord, Telegram — testable with `contribai notify-test` |
 
-## Usage
+## Usage (22 Commands)
 
 ```bash
-# Hunt mode (autonomous)
-contribai hunt                         # Discover and contribute
-contribai hunt --rounds 5 --delay 15   # 5 rounds, 15min delay
-contribai hunt --mode issues           # Issue solving only
+# Hunt & contribute
+contribai hunt                        # Autonomous discovery + PRs
+contribai hunt --dry-run              # Analyze only, no PRs
+contribai run                         # Single pipeline run
+contribai target <url>                # Target specific repo
+contribai analyze <url>               # Dry-run analysis
+contribai solve <url>                 # Solve open issues
 
-# Target specific repos
-contribai target <repo_url>            # Analyze and contribute
-contribai solve <repo_url>             # Solve open issues
+# Monitor
+contribai patrol                      # Respond to PR reviews
+contribai status                      # PR status table
+contribai stats                       # Contribution statistics
+contribai leaderboard                 # Merge rate by repo
+contribai system-status               # DB, rate limits, scheduler
 
-# Monitor & maintain
-contribai patrol                       # Respond to PR reviews
-contribai status                       # Check submitted PRs
-contribai stats                        # Overall statistics
-contribai cleanup                      # Remove stale forks
+# Interactive
+contribai                             # Interactive menu (22 items)
+contribai interactive                 # ratatui TUI browser
+contribai init                        # Setup wizard
+contribai login                       # Auth status
 
-# Platform
-contribai serve                        # Dashboard at :8787
-contribai schedule --cron "0 */6 * * *"  # Auto-run every 6h
+# Config
+contribai config-list
+contribai config-get llm.provider
+contribai config-set llm.provider openai
+contribai profile security-focused    # Named profile
 
-# Profiles
-contribai profile security-focused     # Run with preset profile
+# Servers
+contribai web-server                  # Dashboard at :8787
+contribai schedule                    # Cron scheduler
+contribai mcp-server                  # MCP stdio server
+contribai cleanup                     # Remove stale forks
+contribai notify-test                 # Test Slack/Discord/Telegram
 ```
 
 ## Configuration
@@ -103,38 +114,62 @@ llm:
   api_key: "your_api_key"
 
 discovery:
-  languages: [python, javascript]
+  languages: [python, javascript, rust, go]
   stars_range: [100, 5000]
 ```
 
-See [`config.example.yaml`](config.example.yaml) for all options.
+See [`config.yaml.template`](config.yaml.template) for all options.
 
 ## Architecture
 
 ```
-contribai/
-├── core/           # Config, models, middleware, events, retry, quotas
-├── llm/            # Multi-provider LLM + task routing + context management
-├── github/         # GitHub API client, discovery, guidelines
-├── analysis/       # 20+ analysis skills + framework detection + compression
-├── generator/      # Fix generation + self-review + quality scoring
-├── orchestrator/   # Pipeline, SQLite memory (7 tables), review gate
-├── pr/             # PR lifecycle + patrol + CLA/DCO compliance
-├── issues/         # Issue classification + multi-file solving
-├── agents/         # Sub-agent registry (DeerFlow-inspired)
-├── tools/          # Extensible tool protocol
-├── mcp/            # MCP client for external tools
-├── mcp_server.py   # MCP server (14 tools for Claude Desktop)
-├── sandbox/        # Docker-based code validation
-├── web/            # FastAPI dashboard + webhooks + auth
-├── scheduler/      # APScheduler cron automation
-├── notifications/  # Slack, Discord, Telegram
-├── plugins/        # Entry-point plugin system
-├── templates/      # YAML contribution templates
-└── cli/            # Rich CLI + TUI
+ContribAI/
+├── crates/contribai-rs/src/   ← PRIMARY: Rust v5.1.0
+│   ├── cli/                   # 22 commands + ratatui TUI
+│   ├── core/                  # Config, events, middleware
+│   ├── github/                # REST + GraphQL client
+│   ├── analysis/              # 17 progressive skills
+│   ├── generator/             # LLM fix generation + scoring
+│   ├── orchestrator/          # Pipeline + SQLite memory (72h TTL)
+│   ├── pr/                    # PR lifecycle + patrol
+│   ├── llm/                   # Multi-provider LLM + 5 sub-agents
+│   ├── mcp/                   # 21-tool MCP server (stdio)
+│   ├── web/                   # axum dashboard + webhooks
+│   ├── sandbox/               # Docker + local fallback
+│   └── scheduler/             # Tokio cron
+│
+└── python/                    # Legacy v4.1.0 (reference only)
 ```
 
-See [`docs/system-architecture.md`](docs/system-architecture.md) for detailed architecture.
+See [`docs/system-architecture.md`](docs/system-architecture.md) for details.
+
+## Testing
+
+```bash
+# Rust (primary)
+cargo test                  # 335 tests
+cargo test -- --nocapture   # with stdout
+
+# Python legacy
+cd python && pytest tests/ -v
+```
+
+## MCP — Use from Claude Desktop / Antigravity IDE
+
+```json
+// ~/.config/claude/claude_desktop_config.json
+// or ~/.gemini/antigravity/mcp_config.json
+{
+  "mcpServers": {
+    "contribai": {
+      "command": "contribai",
+      "args": ["mcp-server"]
+    }
+  }
+}
+```
+
+21 tools available: repo analysis, PR management, GitHub search, issue solving, memory queries.
 
 ## Docker
 
@@ -144,62 +179,17 @@ docker compose run --rm runner run        # One-shot run
 docker compose up -d dashboard scheduler  # Dashboard + scheduler
 ```
 
-## Testing
-
-```bash
-pytest tests/ -v                    # Run all 431 tests
-pytest tests/ -v --cov=contribai    # With coverage
-ruff check contribai/               # Lint
-ruff format contribai/              # Format
-```
-
-## Extending
-
-**Plugins** — Create custom analyzers/generators as Python packages:
-
-```python
-from contribai.plugins.base import AnalyzerPlugin
-
-class MyAnalyzer(AnalyzerPlugin):
-    @property
-    def name(self): return "my-analyzer"
-
-    async def analyze(self, context):
-        return findings
-```
-
-```toml
-# pyproject.toml
-[project.entry-points."contribai.analyzers"]
-my_analyzer = "my_package:MyAnalyzer"
-```
-
-**MCP** — Use ContribAI from Claude Desktop or Antigravity IDE:
-
-```json
-// Claude Desktop: ~/.config/claude/claude_desktop_config.json
-// Antigravity IDE: ~/.gemini/antigravity/mcp_config.json
-{
-  "mcpServers": {
-    "contribai": {
-      "command": "python",
-      "args": ["-m", "contribai.mcp_server"]
-    }
-  }
-}
-```
-
 ## Documentation
 
 | Doc | Description |
 |-----|-------------|
 | [`HALL_OF_FAME.md`](HALL_OF_FAME.md) | **9 merged** · **14 closed** across 21+ repos — real results |
+| [`AGENTS.md`](AGENTS.md) | AI agent guide — architecture, patterns, CLI reference |
+| [`deployment-guide.md`](docs/deployment-guide.md) | Install, Docker, config, all 22 CLI commands |
 | [`system-architecture.md`](docs/system-architecture.md) | Pipeline, middleware, events, LLM routing |
-| [`code-standards.md`](docs/code-standards.md) | Conventions, patterns, testing |
-| [`deployment-guide.md`](docs/deployment-guide.md) | Install, Docker, config, CLI reference |
+| [`codebase-summary.md`](docs/codebase-summary.md) | Module map, tech stack, data structures |
 | [`project-roadmap.md`](docs/project-roadmap.md) | Version history and future plans |
-| [`codebase-summary.md`](docs/codebase-summary.md) | Module map and tech stack |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution guidelines |
+| [`python/README_PYTHON.md`](python/README_PYTHON.md) | Legacy Python v4.1.0 reference |
 
 ## License
 
