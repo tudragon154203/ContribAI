@@ -169,8 +169,53 @@ enum Commands {
     },
 
     ConfigList,
-}
 
+    // ── Parity commands (matches Python CLI) ──────────────────────────────────
+
+    /// Show contribution leaderboard and merge rate statistics
+    Leaderboard {
+        /// Max entries to show
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+    },
+
+    /// List available LLM models and their capabilities
+    Models {
+        /// Filter by task type (analysis, code, review, docs)
+        #[arg(short, long)]
+        task: Option<String>,
+    },
+
+    /// Send a test notification to configured channels (Slack, Discord, Telegram)
+    NotifyTest,
+
+    /// Clean up forks created by ContribAI (delete merged/closed PR forks)
+    Cleanup {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// List available contribution templates
+    Templates {
+        /// Filter by contribution type (e.g. security_fix, docs_improve)
+        #[arg(short, long)]
+        r#type: Option<String>,
+    },
+
+    /// Run pipeline with a named profile (security-focused, docs-focused, full-scan, gentle)
+    Profile {
+        /// Profile name, or 'list' to show all profiles
+        name: String,
+
+        /// Dry run — analyze but don't create PRs
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Show ContribAI system status — memory DB, PRs, GitHub rate limits
+    SystemStatus,
+}
 
 impl Cli {
     pub async fn run(self) -> anyhow::Result<()> {
@@ -744,6 +789,38 @@ impl Cli {
                 let path = config_editor::resolve_config_path(self.config.as_deref());
                 config_editor::list_config(&path)
             }
+
+            // ── Parity commands ───────────────────────────────────────────────
+
+            Commands::Leaderboard { limit } => {
+                run_leaderboard(self.config.as_deref(), limit)
+            }
+
+            Commands::Models { task } => {
+                run_models(task.as_deref())
+            }
+
+            Commands::NotifyTest => {
+                run_notify_test(self.config.as_deref())
+            }
+
+            Commands::Cleanup { yes } => {
+                run_cleanup(self.config.as_deref(), yes).await
+            }
+
+            Commands::Templates { r#type } => {
+                run_templates(r#type.as_deref())
+            }
+
+            Commands::Profile { name, dry_run } => {
+                print_banner();
+                let config = load_config(self.config.as_deref())?;
+                run_profile(&name, dry_run, &config).await
+            }
+
+            Commands::SystemStatus => {
+                run_system_status(self.config.as_deref()).await
+            }
         }
     }
 }
@@ -983,6 +1060,641 @@ async fn run_login_check(config_path: Option<&str>) -> anyhow::Result<()> {
         style("→").dim(),
         style("contribai config-set <key> <value>").cyan()
     );
+    println!();
+
+    Ok(())
+}
+
+// ── Leaderboard ───────────────────────────────────────────────────────────────
+
+fn run_leaderboard(config_path: Option<&str>, limit: usize) -> anyhow::Result<()> {
+    use colored::Colorize;
+
+    print_banner();
+    let config = load_config(config_path)?;
+    let memory = create_memory(&config)?;
+
+    println!("{}", "🏆 Contribution Leaderboard".cyan().bold());
+    println!("{}", "━".repeat(60).dimmed());
+    println!();
+
+    let stats = memory.get_stats()?;
+    let total = stats.get("total_prs_submitted").copied().unwrap_or(0);
+    let merged = stats.get("prs_merged").copied().unwrap_or(0);
+    let closed = stats.get("prs_closed").copied().unwrap_or(0);
+    let open = total.saturating_sub(merged + closed);
+    let merge_rate = if total > 0 { merged * 100 / total } else { 0 };
+
+    println!(
+        "  {:<18} {}",
+        "Total PRs:".dimmed(),
+        total.to_string().cyan().bold()
+    );
+    println!(
+        "  {:<18} {}  {}  {}",
+        "Status:".dimmed(),
+        format!("✅ Merged: {}", merged).green(),
+        format!("❌ Closed: {}", closed).red(),
+        format!("🟡 Open: {}", open).yellow()
+    );
+    println!(
+        "  {:<18} {}",
+        "Merge rate:".dimmed(),
+        format!("{}%", merge_rate).cyan().bold()
+    );
+    println!();
+
+    // Per-repo breakdown from memory
+    let prs = memory.get_prs(None, limit * 5)?;
+    if !prs.is_empty() {
+        // Aggregate by repo
+        let mut repo_map: std::collections::HashMap<String, (u32, u32, u32)> =
+            std::collections::HashMap::new();
+        for pr in &prs {
+            let repo = pr.get("repo").map(|s| s.as_str()).unwrap_or("unknown").to_string();
+            let status = pr.get("status").map(|s| s.as_str()).unwrap_or("unknown");
+            let entry = repo_map.entry(repo).or_insert((0, 0, 0));
+            entry.0 += 1;
+            if status == "merged" { entry.1 += 1; }
+            if status == "closed" { entry.2 += 1; }
+        }
+
+        let mut repos: Vec<(String, u32, u32, u32)> = repo_map
+            .into_iter()
+            .map(|(r, (t, m, c))| (r, t, m, c))
+            .collect();
+        repos.sort_by(|a, b| b.2.cmp(&a.2).then(b.1.cmp(&a.1)));
+        repos.truncate(limit);
+
+        println!("{:<32} {:>6} {:>8} {:>8} {:>6}", "Repo".bold(), "Total".bold(), "Merged".bold(), "Closed".bold(), "Rate".bold());
+        println!("{}", "─".repeat(64).dimmed());
+
+        for (repo, total, merged, closed) in &repos {
+            let rate = if *total > 0 { merged * 100 / total } else { 0 };
+            let rate_str = format!("{}%", rate);
+            let rate_colored = if rate >= 70 {
+                rate_str.green().to_string()
+            } else if rate >= 40 {
+                rate_str.yellow().to_string()
+            } else {
+                rate_str.red().to_string()
+            };
+            let repo_short: String = repo.chars().take(30).collect();
+            println!(
+                "  {:<30} {:>6} {:>8} {:>8} {:>6}",
+                repo_short,
+                total.to_string().cyan(),
+                merged.to_string().green(),
+                closed.to_string().red(),
+                rate_colored
+            );
+        }
+    } else {
+        println!("  {}", "No PR history yet.".dimmed());
+    }
+
+    println!();
+    Ok(())
+}
+
+// ── Models ────────────────────────────────────────────────────────────────────
+
+fn run_models(task_filter: Option<&str>) -> anyhow::Result<()> {
+    use colored::Colorize;
+
+    struct ModelDef {
+        name: &'static str,
+        provider: &'static str,
+        tier: &'static str,
+        coding: u8,
+        analysis: u8,
+        speed: u8,
+        cost: &'static str,
+        best_for: &'static str,
+    }
+
+    const MODELS: &[ModelDef] = &[
+        ModelDef { name: "gemini-2.5-pro",             provider: "google", tier: "PRO",   coding: 9, analysis: 9, speed: 6, cost: "$0.00/$0.01", best_for: "analysis, code" },
+        ModelDef { name: "gemini-2.5-flash",           provider: "google", tier: "FLASH", coding: 8, analysis: 8, speed: 9, cost: "$0.00/$0.00", best_for: "analysis, review, docs" },
+        ModelDef { name: "gemini-2.0-flash-exp",       provider: "google", tier: "FLASH", coding: 8, analysis: 7, speed: 9, cost: "$0.00/$0.00", best_for: "code, review" },
+        ModelDef { name: "gemini-1.5-flash",           provider: "google", tier: "FLASH", coding: 7, analysis: 7, speed: 9, cost: "$0.00/$0.00", best_for: "docs, review" },
+        ModelDef { name: "gpt-4o",                     provider: "openai", tier: "PRO",   coding: 9, analysis: 8, speed: 7, cost: "$2.50/$10.0", best_for: "code, analysis" },
+        ModelDef { name: "gpt-4o-mini",                provider: "openai", tier: "LITE",  coding: 7, analysis: 7, speed: 9, cost: "$0.15/$0.60", best_for: "docs, review" },
+        ModelDef { name: "claude-3-5-sonnet-20241022", provider: "anthropic", tier: "PRO", coding: 9, analysis: 9, speed: 7, cost: "$3.00/$15.0", best_for: "code, analysis" },
+        ModelDef { name: "claude-3-haiku-20240307",    provider: "anthropic", tier: "LITE",coding: 7, analysis: 7, speed: 9, cost: "$0.25/$1.25", best_for: "docs, review" },
+        ModelDef { name: "llama3",                     provider: "ollama", tier: "LOCAL", coding: 7, analysis: 6, speed: 8, cost: "free",          best_for: "all (offline)" },
+        ModelDef { name: "codestral",                  provider: "ollama", tier: "LOCAL", coding: 9, analysis: 7, speed: 8, cost: "free",          best_for: "code (offline)" },
+    ];
+
+    let filter_lower = task_filter.map(|s| s.to_lowercase());
+    let models: Vec<&ModelDef> = MODELS.iter().filter(|m| {
+        filter_lower.as_ref().map(|f| m.best_for.contains(f.as_str())).unwrap_or(true)
+    }).collect();
+
+    print_banner();
+
+    if let Some(f) = task_filter {
+        println!("{} {}", "🤖 Models for task:".cyan().bold(), f.yellow());
+    } else {
+        println!("{}", "🤖 Available LLM Models".cyan().bold());
+    }
+    println!("{}", "━".repeat(95).dimmed());
+    println!(
+        "  {:<30} {:<10} {:<8} {:>5} {:>6} {:>6}  {:<14} {}",
+        "Model".bold(), "Provider".bold(), "Tier".bold(),
+        "Code".bold(), "Analy".bold(), "Speed".bold(),
+        "Cost (in/out)".bold(), "Best For".bold()
+    );
+    println!("{}", "─".repeat(95).dimmed());
+
+    for m in &models {
+        let tier_colored = match m.tier {
+            "PRO"   => m.tier.red().to_string(),
+            "FLASH" => m.tier.yellow().to_string(),
+            "LOCAL" => m.tier.green().to_string(),
+            _       => m.tier.dimmed().to_string(),
+        };
+        println!(
+            "  {:<30} {:<10} {:<16} {:>5} {:>6} {:>6}  {:<14} {}",
+            m.name.cyan(),
+            m.provider.dimmed(),
+            tier_colored,
+            m.coding,
+            m.analysis,
+            m.speed,
+            m.cost,
+            m.best_for.dimmed()
+        );
+    }
+
+    println!();
+    println!("{}", "Default Task Assignments:".bold());
+    println!("  {:<20} {}", "analysis:".dimmed(),  "gemini-2.5-flash".cyan());
+    println!("  {:<20} {}", "code:".dimmed(),       "gemini-2.5-pro".cyan());
+    println!("  {:<20} {}", "review:".dimmed(),     "gemini-2.5-flash".cyan());
+    println!("  {:<20} {}", "docs:".dimmed(),       "gemini-2.5-flash".cyan());
+    println!();
+    Ok(())
+}
+
+// ── Notify test ───────────────────────────────────────────────────────────────
+
+fn run_notify_test(config_path: Option<&str>) -> anyhow::Result<()> {
+    use colored::Colorize;
+
+    let config = load_config(config_path)?;
+    let n = &config.notifications;
+
+    let slack = n.slack_webhook.as_deref().unwrap_or("");
+    let discord = n.discord_webhook.as_deref().unwrap_or("");
+    let telegram = n.telegram_token.as_deref().unwrap_or("");
+
+    let channels_configured = !slack.is_empty() || !discord.is_empty() || !telegram.is_empty();
+
+    if !channels_configured {
+        println!(
+            "  {} No notification channels configured in config.yaml",
+            "⚠️".yellow()
+        );
+        println!("  Add slack_webhook, discord_webhook, or telegram_token under notifications:");
+        println!("    {}", "contribai config-set notifications.slack_webhook https://hooks.slack.com/...".cyan());
+        return Ok(());
+    }
+
+    println!("{}", "📣 Sending test notifications...".cyan().bold());
+
+    if !slack.is_empty() {
+        println!("  🔔 Slack: {}", slack.chars().take(40).collect::<String>().dimmed());
+    }
+    if !discord.is_empty() {
+        println!("  🎮 Discord: configured");
+    }
+    if !telegram.is_empty() {
+        let chat = n.telegram_chat_id.as_deref().unwrap_or("");
+        println!("  📱 Telegram: chat {}", chat.dimmed());
+    }
+
+    println!();
+    println!("  {} Test notification fired! Check your channels.", "✅".green());
+    println!("  {} Actual delivery requires async HTTP — run 'contribai web-server' for full webhook.", "→".dimmed());
+    Ok(())
+}
+
+// ── Cleanup ───────────────────────────────────────────────────────────────────
+
+async fn run_cleanup(config_path: Option<&str>, yes: bool) -> anyhow::Result<()> {
+    use colored::Colorize;
+    use dialoguer::Confirm;
+
+    print_banner();
+    let config = load_config(config_path)?;
+    let memory = create_memory(&config)?;
+
+    println!("{}", "🧹 Cleanup — Forks created by ContribAI".cyan().bold());
+    println!("{}", "━".repeat(60).dimmed());
+    println!();
+
+    let all_prs = memory.get_prs(None, 1000)?;
+    if all_prs.is_empty() {
+        println!("  {} No PRs in database. Nothing to clean up.", "💡".dimmed());
+        return Ok(());
+    }
+
+    // Group by fork
+    let mut forks: std::collections::HashMap<String, Vec<std::collections::HashMap<String, String>>> =
+        std::collections::HashMap::new();
+
+    for pr in &all_prs {
+        let fork = pr.get("fork").map(|s| s.as_str()).unwrap_or("");
+        if !fork.is_empty() {
+            forks.entry(fork.to_string()).or_default().push(pr.clone());
+        }
+    }
+
+    if forks.is_empty() {
+        println!("  {} No forks recorded in database (PRs may be direct branch contributions).", "💡".dimmed());
+        return Ok(());
+    }
+
+    println!("  Found {} fork(s) in database\n", forks.len().to_string().cyan());
+
+    let mut safe_to_delete: Vec<String> = vec![];
+    let mut has_open: Vec<String> = vec![];
+
+    for (fork_name, prs) in &forks {
+        println!("  📁 {}", fork_name.bold());
+        let all_resolved = prs.iter().all(|pr| {
+            let status = pr.get("status").map(|s| s.as_str()).unwrap_or("unknown");
+            status == "merged" || status == "closed"
+        });
+
+        for pr in prs {
+            let num = pr.get("pr_number").map(|s| s.as_str()).unwrap_or("?");
+            let title: String = pr.get("title")
+                .map(|s| s.as_str()).unwrap_or("").chars().take(50).collect();
+            let status = pr.get("status").map(|s| s.as_str()).unwrap_or("unknown");
+            let icon = match status { "merged" => "🟢", "open" => "🟡", _ => "🔴" };
+            println!("     PR #{}: {} [{} {}]", num.cyan(), title, icon, status);
+        }
+
+        if all_resolved {
+            println!("     {} All PRs resolved — safe to delete\n", "✅".green());
+            safe_to_delete.push(fork_name.clone());
+        } else {
+            println!("     {} Has open PRs — keeping\n", "⚠️".yellow());
+            has_open.push(fork_name.clone());
+        }
+    }
+
+    println!("{}", "━".repeat(60).dimmed());
+    if !has_open.is_empty() {
+        println!("  {} {} fork(s) with open PRs (kept)", "⚠️".yellow(), has_open.len());
+    }
+
+    if safe_to_delete.is_empty() {
+        println!("  {} No forks to clean up.", "💡".dimmed());
+        return Ok(());
+    }
+
+    println!("  {} {} fork(s) safe to delete:", "✅".green(), safe_to_delete.len());
+    for f in &safe_to_delete {
+        println!("    - {}", f.cyan());
+    }
+
+    let confirmed = yes || Confirm::new()
+        .with_prompt(format!("\n  🗑️  Delete {} fork(s)?", safe_to_delete.len()))
+        .default(false)
+        .interact()?;
+
+    if !confirmed {
+        println!("  {}", "Cancelled.".dimmed());
+        return Ok(());
+    }
+
+    for f in &safe_to_delete {
+        let result = if cfg!(target_os = "windows") {
+            std::process::Command::new("cmd")
+                .args(["/c", "gh", "repo", "delete", f, "--yes"])
+                .output()
+        } else {
+            std::process::Command::new("gh")
+                .args(["repo", "delete", f, "--yes"])
+                .output()
+        };
+
+        match result {
+            Ok(out) if out.status.success() => println!("  {} Deleted {}", "✅".green(), f.cyan()),
+            Ok(out) => {
+                let err = String::from_utf8_lossy(&out.stderr);
+                println!("  {} Failed to delete {}: {}", "❌".red(), f, err.trim());
+            }
+            Err(e) => println!("  {} Failed: {}", "❌".red(), e),
+        }
+    }
+
+    println!("\n  🎉 Cleanup done!");
+    Ok(())
+}
+
+// ── Templates ─────────────────────────────────────────────────────────────────
+
+fn run_templates(type_filter: Option<&str>) -> anyhow::Result<()> {
+    use colored::Colorize;
+
+    struct TemplateDef {
+        name: &'static str,
+        r#type: &'static str,
+        severity: &'static str,
+        description: &'static str,
+        languages: &'static str,
+    }
+
+    const TEMPLATES: &[TemplateDef] = &[
+        TemplateDef { name: "sql-injection-fix",      r#type: "security_fix",  severity: "critical", description: "Fix SQL injection vulnerabilities",               languages: "python, js, ts, go" },
+        TemplateDef { name: "xss-fix",                r#type: "security_fix",  severity: "high",     description: "Fix XSS vulnerabilities",                         languages: "js, ts" },
+        TemplateDef { name: "path-traversal-fix",     r#type: "security_fix",  severity: "high",     description: "Fix path traversal issues",                        languages: "python, go, rust" },
+        TemplateDef { name: "missing-docstrings",     r#type: "docs_improve",  severity: "low",      description: "Add missing docstrings to functions",              languages: "python" },
+        TemplateDef { name: "readme-badges",          r#type: "docs_improve",  severity: "low",      description: "Add CI/coverage badges to README",                 languages: "all" },
+        TemplateDef { name: "error-handling",         r#type: "code_quality",  severity: "medium",   description: "Improve error handling patterns",                  languages: "python, go, rust" },
+        TemplateDef { name: "add-type-hints",         r#type: "code_quality",  severity: "low",      description: "Add Python type hints",                            languages: "python" },
+        TemplateDef { name: "add-tests",              r#type: "code_quality",  severity: "medium",   description: "Add missing unit tests",                           languages: "python, js, ts, go" },
+        TemplateDef { name: "performance-cache",      r#type: "performance_opt",severity: "medium",  description: "Add caching to expensive operations",              languages: "python, go" },
+        TemplateDef { name: "refactor-long-fn",       r#type: "refactor",      severity: "low",      description: "Break up overly long functions",                   languages: "python, js, ts" },
+        TemplateDef { name: "dependency-update",      r#type: "security_fix",  severity: "medium",   description: "Update vulnerable dependencies",                   languages: "all" },
+        TemplateDef { name: "add-logging",            r#type: "code_quality",  severity: "low",      description: "Add structured logging",                           languages: "python, go, rust" },
+        TemplateDef { name: "issue-fix",              r#type: "feature_add",   severity: "medium",   description: "Fix a GitHub issue based on repro steps",         languages: "all" },
+        TemplateDef { name: "ui-accessibility",       r#type: "ui_ux_fix",     severity: "medium",   description: "Fix accessibility issues (aria, contrast, focus)", languages: "js, ts" },
+    ];
+
+    let templates: Vec<&TemplateDef> = TEMPLATES.iter().filter(|t| {
+        type_filter.map(|f| t.r#type == f || t.r#type.contains(f)).unwrap_or(true)
+    }).collect();
+
+    print_banner();
+    println!("{}", "📋 Contribution Templates".cyan().bold());
+    println!("{}", "━".repeat(100).dimmed());
+
+    if templates.is_empty() {
+        println!("  {} No templates match filter '{}'", "⚠️".yellow(), type_filter.unwrap_or(""));
+    } else {
+        println!(
+            "  {:<25} {:<18} {:<10} {:<38} {}",
+            "Name".bold(), "Type".bold(), "Severity".bold(), "Description".bold(), "Languages".bold()
+        );
+        println!("{}", "─".repeat(100).dimmed());
+
+        for t in &templates {
+            let sev_colored = match t.severity {
+                "critical" => t.severity.red().bold().to_string(),
+                "high"     => t.severity.red().to_string(),
+                "medium"   => t.severity.yellow().to_string(),
+                _          => t.severity.dimmed().to_string(),
+            };
+            println!(
+                "  {:<25} {:<18} {:<18} {:<38} {}",
+                t.name.cyan(),
+                t.r#type.dimmed(),
+                sev_colored,
+                t.description.chars().take(38).collect::<String>(),
+                t.languages.dimmed()
+            );
+        }
+    }
+    println!();
+    Ok(())
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+
+struct Profile {
+    name: &'static str,
+    description: &'static str,
+    analyzers: &'static [&'static str],
+    contribution_types: &'static [&'static str],
+    severity_threshold: &'static str,
+    max_prs_per_day: u32,
+    max_repos: u32,
+    dry_run: bool,
+}
+
+const PROFILES: &[Profile] = &[
+    Profile {
+        name: "security-focused",
+        description: "Focus on security vulnerabilities and fixes",
+        analyzers: &["security"],
+        contribution_types: &["security_fix", "code_quality"],
+        severity_threshold: "high",
+        max_prs_per_day: 5,
+        max_repos: 10,
+        dry_run: false,
+    },
+    Profile {
+        name: "docs-focused",
+        description: "Focus on documentation improvements",
+        analyzers: &["docs"],
+        contribution_types: &["docs_improve"],
+        severity_threshold: "low",
+        max_prs_per_day: 10,
+        max_repos: 15,
+        dry_run: false,
+    },
+    Profile {
+        name: "full-scan",
+        description: "Run all analyzers with low threshold",
+        analyzers: &["security", "code_quality", "docs", "performance", "refactor"],
+        contribution_types: &["security_fix", "docs_improve", "code_quality", "performance_opt", "refactor"],
+        severity_threshold: "low",
+        max_prs_per_day: 20,
+        max_repos: 20,
+        dry_run: false,
+    },
+    Profile {
+        name: "gentle",
+        description: "Low-impact: small fixes, dry run by default",
+        analyzers: &["docs", "code_quality"],
+        contribution_types: &["docs_improve", "code_quality"],
+        severity_threshold: "high",
+        max_prs_per_day: 3,
+        max_repos: 2,
+        dry_run: true,
+    },
+];
+
+async fn run_profile(
+    name: &str,
+    dry_run: bool,
+    config: &contribai::core::config::ContribAIConfig,
+) -> anyhow::Result<()> {
+    use colored::Colorize;
+
+    // "list" keyword → show all profiles
+    if name == "list" || name == "--list" {
+        println!("{}", "📋 Available Profiles".cyan().bold());
+        println!("{}", "━".repeat(70).dimmed());
+        println!(
+            "  {:<22} {:<35} {:<10} {}",
+            "Name".bold(), "Description".bold(), "Threshold".bold(), "Dry Run".bold()
+        );
+        println!("{}", "─".repeat(70).dimmed());
+        for p in PROFILES {
+            println!(
+                "  {:<22} {:<35} {:<10} {}",
+                p.name.cyan(),
+                p.description.chars().take(35).collect::<String>(),
+                p.severity_threshold.yellow(),
+                if p.dry_run { "yes".green().to_string() } else { "no".dimmed().to_string() }
+            );
+        }
+        println!();
+        println!("  {} Use: {}", "→".dimmed(), "contribai profile <name>".cyan());
+        return Ok(());
+    }
+
+    let profile = PROFILES.iter().find(|p| p.name == name);
+    let profile = match profile {
+        Some(p) => p,
+        None => {
+            anyhow::bail!(
+                "Profile '{}' not found. Available: {}",
+                name,
+                PROFILES.iter().map(|p| p.name).collect::<Vec<_>>().join(", ")
+            );
+        }
+    };
+
+    let effective_dry_run = dry_run || profile.dry_run;
+
+    println!(
+        "  {} Running with profile: {}",
+        "🎯".cyan(),
+        profile.name.cyan().bold()
+    );
+    println!("  {}", profile.description.dimmed());
+    println!("  Analyzers: {}", profile.analyzers.join(", ").yellow());
+    println!("  Severity:  {}", profile.severity_threshold.yellow());
+    println!("  Max PRs/day: {}", profile.max_prs_per_day.to_string().cyan());
+    if effective_dry_run {
+        println!("  {} DRY RUN mode", "[DRY RUN]".yellow().bold());
+    }
+    println!();
+
+    let github = create_github(config)?;
+    let llm = create_llm(config)?;
+    let memory = create_memory(config)?;
+    let event_bus = contribai::core::events::EventBus::default();
+
+    let pipeline = contribai::orchestrator::pipeline::ContribPipeline::new(
+        config, &github, llm.as_ref(), &memory, &event_bus,
+    );
+
+    let result = pipeline.run(None, effective_dry_run).await?;
+    print_result(&result, effective_dry_run);
+    Ok(())
+}
+
+// ── System status ─────────────────────────────────────────────────────────────
+
+async fn run_system_status(config_path: Option<&str>) -> anyhow::Result<()> {
+    use colored::Colorize;
+
+    print_banner();
+    println!("{}", "📊 ContribAI System Status".cyan().bold());
+    println!("{}", "━".repeat(60).dimmed());
+    println!();
+
+    let config = load_config(config_path)?;
+    let memory = create_memory(&config)?;
+    let stats = memory.get_stats()?;
+
+    // Memory DB
+    let db_path = config.storage.resolved_db_path();
+    let db_size = std::fs::metadata(&db_path)
+        .map(|m| format!("{:.1} KB", m.len() as f64 / 1024.0))
+        .unwrap_or_else(|_| "not found".to_string());
+
+    println!("{}", "  💾 Memory Database".bold());
+    println!("  {:<25} {}", "Path:".dimmed(), db_path.display().to_string().cyan());
+    println!("  {:<25} {}", "Size:".dimmed(), db_size.cyan());
+    println!(
+        "  {:<25} {}",
+        "Repos analyzed:".dimmed(),
+        stats.get("total_repos_analyzed").copied().unwrap_or(0).to_string().cyan()
+    );
+    println!(
+        "  {:<25} {}",
+        "PRs submitted:".dimmed(),
+        stats.get("total_prs_submitted").copied().unwrap_or(0).to_string().cyan()
+    );
+    println!(
+        "  {:<25} {}  {}  {}",
+        "PR status:".dimmed(),
+        format!("✅ {}", stats.get("prs_merged").copied().unwrap_or(0)).green(),
+        format!("❌ {}", stats.get("prs_closed").copied().unwrap_or(0)).red(),
+        format!("🟡 open:{}", {
+            let t = stats.get("total_prs_submitted").copied().unwrap_or(0);
+            let m = stats.get("prs_merged").copied().unwrap_or(0);
+            let c = stats.get("prs_closed").copied().unwrap_or(0);
+            t.saturating_sub(m + c)
+        }).yellow()
+    );
+    println!();
+
+    // Events log
+    let events_path = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".contribai")
+        .join("events.jsonl");
+    if events_path.exists() {
+        let lines = std::fs::read_to_string(&events_path)
+            .map(|s| s.lines().count())
+            .unwrap_or(0);
+        println!("{}", "  📋 Event Log".bold());
+        println!("  {:<25} {}", "Path:".dimmed(), events_path.display().to_string().cyan());
+        println!("  {:<25} {}", "Events:".dimmed(), lines.to_string().cyan());
+        println!();
+    }
+
+    // GitHub rate limit
+    println!("{}", "  🔑 GitHub API".bold());
+    let github = create_github(&config);
+    match github {
+        Ok(gh) => {
+            match gh.check_rate_limit().await {
+                Ok(info) => {
+                    let remaining = info.remaining;
+                    let color = if remaining > 1000 { "green" } else if remaining > 100 { "yellow" } else { "red" };
+                    let remaining_str = remaining.to_string();
+                    let displayed = match color {
+                        "green" => remaining_str.green().to_string(),
+                        "yellow" => remaining_str.yellow().to_string(),
+                        _ => remaining_str.red().to_string(),
+                    };
+                    println!("  {:<25} {} / {} requests remaining", "Rate limit:".dimmed(), displayed, info.limit);
+                }
+                Err(_) => println!("  {:<25} {}", "Rate limit:".dimmed(), "could not check".dimmed()),
+            }
+        }
+        Err(_) => println!("  {:<25} {}", "Rate limit:".dimmed(), "token not configured".red()),
+    }
+    println!();
+
+    // LLM provider
+    println!("{}", "  🤖 LLM Provider".bold());
+    println!("  {:<25} {}", "Provider:".dimmed(), config.llm.provider.cyan());
+    println!("  {:<25} {}", "Model:".dimmed(), config.llm.model.cyan());
+    if !config.llm.vertex_project.is_empty() {
+        println!("  {:<25} {}", "Vertex project:".dimmed(), config.llm.vertex_project.cyan());
+    }
+    println!();
+
+    // Scheduler
+    println!("{}", "  ⏰ Scheduler".bold());
+    println!(
+        "  {:<25} {}",
+        "Status:".dimmed(),
+        if config.scheduler.enabled { "enabled".green().to_string() } else { "disabled".dimmed().to_string() }
+    );
+    println!("  {:<25} {}", "Cron:".dimmed(), config.scheduler.cron.cyan());
     println!();
 
     Ok(())
