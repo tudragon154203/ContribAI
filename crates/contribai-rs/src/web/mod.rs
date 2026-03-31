@@ -44,7 +44,7 @@ pub struct AppState {
 
 /// Query parameter for API key fallback (e.g. `?api_key=...`).
 #[derive(Deserialize)]
-struct ApiKeyQuery {
+pub(super) struct ApiKeyQuery {
     api_key: Option<String>,
 }
 
@@ -292,7 +292,7 @@ pub async fn get_runs(
 }
 
 /// POST /api/run — trigger a background run (requires API key if configured)
-pub async fn trigger_run(
+async fn trigger_run(
     headers: HeaderMap,
     Query(query): Query<ApiKeyQuery>,
     State(state): State<AppState>,
@@ -312,7 +312,7 @@ pub async fn trigger_run(
 }
 
 /// POST /api/run/target — trigger run on specific repo (requires API key if configured)
-pub async fn trigger_target(
+async fn trigger_target(
     headers: HeaderMap,
     Query(query): Query<ApiKeyQuery>,
     State(state): State<AppState>,

@@ -4,7 +4,7 @@
 //! Spawns an MCP server subprocess and communicates using JSON-RPC
 //! over stdin/stdout.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
