@@ -7,52 +7,87 @@ on:
     branches: [main]
 
 jobs:
+  # ── Rust: fmt + clippy ────────────────────────────────────────────────────
   lint:
-    name: Lint & Format
+    name: Rust Lint (fmt + clippy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install ruff
-        run: pip install ruff
-      - name: Lint
-        run: ruff check contribai/
-      - name: Format check
-        run: ruff format --check contribai/ tests/
+      - uses: actions/checkout@v4
 
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/contribai-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy -- -D warnings
+
+  # ── Rust: tests ───────────────────────────────────────────────────────────
   test:
-    name: Test (Python ${{ matrix.python-version }})
+    name: Rust Tests
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: pip install -e ".[dev,mcp]"
-      - name: Run tests
-        run: pytest tests/ -v --tb=short --cov=contribai --cov-report=term-missing --cov-fail-under=50
-      - name: Upload coverage
-        if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-report
-          path: htmlcov/
+      - uses: actions/checkout@v4
 
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/contribai-rs/target
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      - name: Build release binary
+        run: cargo build --release
+
+  # ── Rust: security audit ──────────────────────────────────────────────────
   security:
-    name: Security Check
+    name: Rust Security Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit dependencies
+        run: cargo audit
+
+  # ── Python legacy (python/ dir) ───────────────────────────────────────────
+  python-legacy:
+    name: Python Legacy Tests (v4.1.0)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, 'python')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install deps
-        run: pip install -e ".[dev]" pip-audit
-      - name: Audit dependencies
-        run: pip-audit --ignore-vuln CVE-2026-4539  # pygments transitive dep, no fix available yet
+
+      - name: Install dependencies
+        working-directory: python
+        run: pip install -e ".[dev]"
+
+      - name: Run legacy tests
+        working-directory: python
+        run: pytest tests/ -v --tb=short -q
