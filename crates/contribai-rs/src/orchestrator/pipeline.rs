@@ -376,16 +376,7 @@ impl<'a> ContribPipeline<'a> {
         ];
 
         let langs = self.config.discovery.languages.clone();
-        let all_languages: Vec<String> = {
-            let base: &[&str] = &["javascript", "typescript", "go", "rust"];
-            let mut set: HashSet<String> = langs.iter().cloned().collect();
-            for l in base {
-                set.insert(l.to_string());
-            }
-            let mut v: Vec<String> = set.into_iter().collect();
-            v.sort();
-            v
-        };
+        let all_languages = langs.clone(); // Config now includes all supported languages
 
         info!(rounds, delay_sec, mode, "🔥 Hunt mode started");
 

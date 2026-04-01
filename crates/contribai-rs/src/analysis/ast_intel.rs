@@ -3,7 +3,8 @@
 //! 🆕 This is a NEW capability in the Rust version.
 //! Python ContribAI uses regex; Rust ContribAI uses proper AST parsing.
 //!
-//! Supports: Python, JavaScript, TypeScript, Go, Rust, Java, C, C++.
+//! Supports: Python, JavaScript, TypeScript, Go, Rust, Java, C, C++,
+//!           Ruby, PHP, C#, HTML, CSS (13 languages).
 
 use tracing::debug;
 
@@ -21,6 +22,11 @@ pub enum Language {
     Java,
     C,
     Cpp,
+    Ruby,
+    Php,
+    CSharp,
+    Html,
+    Css,
 }
 
 impl Language {
@@ -32,9 +38,17 @@ impl Language {
             "ts" | "tsx" => Some(Self::TypeScript),
             "go" => Some(Self::Go),
             "rs" => Some(Self::Rust),
-            "java" | "kt" => Some(Self::Java),
+            "java" => Some(Self::Java),
+            "kt" | "kts" => Some(Self::Java), // Kotlin uses Java-like AST
             "c" | "h" => Some(Self::C),
             "cpp" | "cc" | "cxx" | "hpp" | "hxx" => Some(Self::Cpp),
+            "rb" | "rake" | "gemspec" => Some(Self::Ruby),
+            "php" => Some(Self::Php),
+            "cs" => Some(Self::CSharp),
+            "swift" => Some(Self::Java), // Swift uses Java-like AST as fallback
+            "html" | "htm" => Some(Self::Html),
+            "css" | "scss" => Some(Self::Css),
+            "vue" | "svelte" => Some(Self::Html), // Vue/Svelte template ≈ HTML
             _ => None,
         }
     }
@@ -47,9 +61,16 @@ impl Language {
             "typescript" => Some(Self::TypeScript),
             "go" => Some(Self::Go),
             "rust" => Some(Self::Rust),
-            "java" | "kotlin" => Some(Self::Java),
+            "java" => Some(Self::Java),
+            "kotlin" => Some(Self::Java),
             "c" => Some(Self::C),
             "c++" | "cpp" => Some(Self::Cpp),
+            "ruby" => Some(Self::Ruby),
+            "php" => Some(Self::Php),
+            "c#" | "csharp" => Some(Self::CSharp),
+            "swift" => Some(Self::Java),
+            "html" => Some(Self::Html),
+            "css" | "scss" => Some(Self::Css),
             _ => None,
         }
     }
@@ -100,6 +121,11 @@ impl AstIntel {
             Language::Java => tree_sitter_java::LANGUAGE,
             Language::C => tree_sitter_c::LANGUAGE,
             Language::Cpp => tree_sitter_cpp::LANGUAGE,
+            Language::Ruby => tree_sitter_ruby::LANGUAGE,
+            Language::Php => tree_sitter_php::LANGUAGE_PHP,
+            Language::CSharp => tree_sitter_c_sharp::LANGUAGE,
+            Language::Html => tree_sitter_html::LANGUAGE,
+            Language::Css => tree_sitter_css::LANGUAGE,
         };
         Ok(ts_lang.into())
     }
@@ -163,11 +189,12 @@ impl AstIntel {
                 _ => None,
             },
             Language::Java => match kind {
-                "method_declaration" => Some(SymbolKind::Method),
+                "method_declaration" | "constructor_declaration" => Some(SymbolKind::Method),
                 "class_declaration" => Some(SymbolKind::Class),
                 "interface_declaration" => Some(SymbolKind::Interface),
                 "enum_declaration" => Some(SymbolKind::Enum),
                 "import_declaration" => Some(SymbolKind::Import),
+                "field_declaration" => Some(SymbolKind::Constant),
                 _ => None,
             },
             Language::C | Language::Cpp => match kind {
@@ -176,6 +203,55 @@ impl AstIntel {
                 "enum_specifier" => Some(SymbolKind::Enum),
                 "class_specifier" => Some(SymbolKind::Class),
                 "preproc_include" => Some(SymbolKind::Import),
+                _ => None,
+            },
+            Language::Ruby => match kind {
+                "method" | "singleton_method" => Some(SymbolKind::Function),
+                "class" => Some(SymbolKind::Class),
+                "module" => Some(SymbolKind::Class),
+                "call" => {
+                    // Detect require/include
+                    if let Some(name) = Self::extract_name(node, source) {
+                        if name == "require" || name == "include" || name == "require_relative" {
+                            Some(SymbolKind::Import)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            },
+            Language::Php => match kind {
+                "function_definition" => Some(SymbolKind::Function),
+                "method_declaration" => Some(SymbolKind::Method),
+                "class_declaration" => Some(SymbolKind::Class),
+                "interface_declaration" => Some(SymbolKind::Interface),
+                "trait_declaration" => Some(SymbolKind::Interface),
+                "enum_declaration" => Some(SymbolKind::Enum),
+                "namespace_use_declaration" => Some(SymbolKind::Import),
+                _ => None,
+            },
+            Language::CSharp => match kind {
+                "method_declaration" | "constructor_declaration" => Some(SymbolKind::Method),
+                "class_declaration" | "record_declaration" => Some(SymbolKind::Class),
+                "interface_declaration" => Some(SymbolKind::Interface),
+                "enum_declaration" => Some(SymbolKind::Enum),
+                "struct_declaration" => Some(SymbolKind::Struct),
+                "using_directive" => Some(SymbolKind::Import),
+                "property_declaration" => Some(SymbolKind::Constant),
+                _ => None,
+            },
+            Language::Html => match kind {
+                "element" | "script_element" | "style_element" => Some(SymbolKind::Struct),
+                _ => None,
+            },
+            Language::Css => match kind {
+                "rule_set" => Some(SymbolKind::Struct),
+                "import_statement" => Some(SymbolKind::Import),
+                "media_statement" => Some(SymbolKind::Function),
+                "keyframes_statement" => Some(SymbolKind::Function),
                 _ => None,
             },
         };
@@ -207,6 +283,9 @@ impl AstIntel {
             "identifier",
             "property_identifier",
             "type_identifier",
+            "tag_name",
+            "class_name",
+            "constant",
         ];
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -270,6 +349,14 @@ mod tests {
         assert_eq!(Language::from_extension("java"), Some(Language::Java));
         assert_eq!(Language::from_extension("c"), Some(Language::C));
         assert_eq!(Language::from_extension("cpp"), Some(Language::Cpp));
+        assert_eq!(Language::from_extension("rb"), Some(Language::Ruby));
+        assert_eq!(Language::from_extension("php"), Some(Language::Php));
+        assert_eq!(Language::from_extension("cs"), Some(Language::CSharp));
+        assert_eq!(Language::from_extension("html"), Some(Language::Html));
+        assert_eq!(Language::from_extension("css"), Some(Language::Css));
+        assert_eq!(Language::from_extension("kt"), Some(Language::Java));
+        assert_eq!(Language::from_extension("swift"), Some(Language::Java));
+        assert_eq!(Language::from_extension("vue"), Some(Language::Html));
         assert_eq!(Language::from_extension("md"), None);
     }
 
@@ -371,6 +458,62 @@ function handleClick(event) {
 "#;
         let symbols = AstIntel::extract_symbols(source, "test.js").unwrap();
         assert!(!symbols.is_empty(), "Should extract JS symbols");
+    }
+
+    #[test]
+    fn test_extract_ruby_symbols() {
+        let source = r#"
+require 'json'
+
+module MyModule
+  class MyClass
+    def initialize(name)
+      @name = name
+    end
+
+    def greet
+      puts "Hello, #{@name}"
+    end
+  end
+end
+"#;
+        let symbols = AstIntel::extract_symbols(source, "test.rb").unwrap();
+        assert!(!symbols.is_empty(), "Should extract Ruby symbols");
+    }
+
+    #[test]
+    fn test_extract_php_symbols() {
+        let source = r#"<?php
+namespace App\Controllers;
+
+use App\Models\User;
+
+class UserController {
+    public function index() {
+        return User::all();
+    }
+}
+"#;
+        let symbols = AstIntel::extract_symbols(source, "test.php").unwrap();
+        assert!(!symbols.is_empty(), "Should extract PHP symbols");
+    }
+
+    #[test]
+    fn test_extract_csharp_symbols() {
+        let source = r#"
+using System;
+using System.Collections.Generic;
+
+namespace MyApp {
+    public class Program {
+        public static void Main(string[] args) {
+            Console.WriteLine("Hello");
+        }
+    }
+}
+"#;
+        let symbols = AstIntel::extract_symbols(source, "test.cs").unwrap();
+        assert!(!symbols.is_empty(), "Should extract C# symbols");
     }
 
     #[test]

@@ -388,7 +388,23 @@ pub struct DiscoveryConfig {
 }
 
 fn default_disc_languages() -> Vec<String> {
-    vec!["python".into()]
+    vec![
+        "python".into(),
+        "javascript".into(),
+        "typescript".into(),
+        "go".into(),
+        "rust".into(),
+        "java".into(),
+        "ruby".into(),
+        "php".into(),
+        "c".into(),
+        "cpp".into(),
+        "csharp".into(),
+        "swift".into(),
+        "kotlin".into(),
+        "html".into(),
+        "css".into(),
+    ]
 }
 fn default_disc_stars_min() -> i64 {
     50
