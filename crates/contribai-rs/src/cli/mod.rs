@@ -1500,6 +1500,16 @@ fn run_models(task_filter: Option<&str>) -> anyhow::Result<()> {
             best_for: "analysis, code",
         },
         ModelDef {
+            name: "gemini-3-pro-preview",
+            provider: "google",
+            tier: "PRO",
+            coding: 10,
+            analysis: 10,
+            speed: 7,
+            cost: "$1.25/$10.0",
+            best_for: "analysis, code",
+        },
+        ModelDef {
             name: "gemini-3-flash-preview",
             provider: "google",
             tier: "FLASH",
