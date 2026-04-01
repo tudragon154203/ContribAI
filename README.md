@@ -5,7 +5,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-335%20passed-brightgreen)](#testing)
-[![Version](https://img.shields.io/badge/version-5.2.0-blue)](https://github.com/tang-vu/ContribAI/releases)
+[![Version](https://img.shields.io/badge/version-5.3.0-blue)](https://github.com/tang-vu/ContribAI/releases)
 
 ### 🏆 Results
 
@@ -18,7 +18,7 @@
 
 > Set it up once, wake up to merged PRs. See the [**Hall of Fame →**](HALL_OF_FAME.md)
 
-ContribAI discovers open source repos, analyzes code for improvements, generates fixes, and submits Pull Requests — all autonomously. **v5.2.0 is written in Rust** for ~10–50× faster analysis and a ~4.5 MB single binary.
+ContribAI discovers open source repos, analyzes code for improvements, generates fixes, and submits Pull Requests — all autonomously. **v5.3.0 is written in Rust** with tree-sitter AST analysis for 13 languages and a ~4.5 MB single binary.
 
 ```
   ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
@@ -56,8 +56,8 @@ contribai interactive       # Browse PRs/repos in ratatui TUI
 
 | Category | Highlights |
 |----------|-----------|
-| **Analysis** | Security (SQLi, XSS, resource leak), code quality, performance, docs, complexity |
-| **LLM** | Gemini, OpenAI, Anthropic, Ollama, Vertex AI — smart task routing across model tiers |
+| **Analysis** | 13-language tree-sitter AST, security (SQLi, XSS, resource leak), code quality, performance, docs |
+| **LLM** | Gemini 3.x, OpenAI, Anthropic, Ollama, Vertex AI — smart task routing across model tiers |
 | **Hunt Mode** | Multi-round autonomous hunting, issue-first strategy, cross-file fixes |
 | **PR Patrol** | Monitors PRs for review feedback, auto-responds and pushes fixes |
 | **Interactive TUI** | ratatui 4-tab browser: Dashboard / PRs / Repos / Actions |
@@ -113,11 +113,11 @@ github:
 
 llm:
   provider: "gemini"            # gemini | openai | anthropic | ollama
-  model: "gemini-2.5-flash"
+  model: "gemini-3-flash-preview"
   api_key: "your_api_key"
 
 discovery:
-  languages: [python, javascript, rust, go]
+  languages: [python, javascript, typescript, go, rust, java, ruby, php, c, cpp, csharp, swift, kotlin]
   stars_range: [100, 5000]
 ```
 
@@ -127,11 +127,11 @@ See [`config.yaml.template`](config.yaml.template) for all options.
 
 ```
 ContribAI/
-├── crates/contribai-rs/src/   ← PRIMARY: Rust v5.2.0
+├── crates/contribai-rs/src/   ← PRIMARY: Rust v5.3.0
 │   ├── cli/                   # 22 commands + ratatui TUI
 │   ├── core/                  # Config, events, middleware
 │   ├── github/                # REST + GraphQL client
-│   ├── analysis/              # 17 progressive skills
+│   ├── analysis/              # 13-lang AST + 17 progressive skills
 │   ├── generator/             # LLM fix generation + scoring
 │   ├── orchestrator/          # Pipeline + SQLite memory (72h TTL)
 │   ├── pr/                    # PR lifecycle + patrol
@@ -150,7 +150,7 @@ See [`docs/system-architecture.md`](docs/system-architecture.md) for details.
 
 ```bash
 # Rust (primary)
-cargo test                  # 335 tests
+cargo test                  # 335+ tests
 cargo test -- --nocapture   # with stdout
 
 # Python legacy

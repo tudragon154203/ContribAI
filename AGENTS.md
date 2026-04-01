@@ -11,7 +11,7 @@ It discovers repos, analyzes code, generates fixes, and submits pull requests �
 **It is NOT** a library/SDK, web app, or CLI tool intended for end-user consumption.
 It is itself an AI agent that operates on other GitHub repositories.
 
-> **v5.2.0 — Primary implementation is Rust** (`crates/contribai-rs/`).
+> **v5.3.0 — Primary implementation is Rust** (`crates/contribai-rs/`).
 > Python code is in `python/` (legacy v4.1.0, kept for reference).
 
 ## Tech Stack
@@ -22,19 +22,20 @@ It is itself an AI agent that operates on other GitHub repositories.
 | Async | tokio (full), async/await throughout |
 | HTTP | reqwest 0.12 (async, rustls) |
 | Database | SQLite (rusqlite, bundled) |
-| LLM | Google Gemini (primary), OpenAI, Anthropic, Ollama, Vertex AI |
+| LLM | Google Gemini 3.x (primary), OpenAI, Anthropic, Ollama, Vertex AI |
 | GitHub | REST API v3 + GraphQL (via reqwest) |
 | Web | axum 0.7 + tower-http |
 | TUI | ratatui + crossterm |
 | CLI | clap v4 (derive) + dialoguer + colored |
-| Tests | 335 tests (mockall, wiremock, tokio-test) |
+| AST | tree-sitter (13 languages: Python, JS, TS, Go, Rust, Java, C, C++, Ruby, PHP, C#, HTML, CSS) |
+| Tests | 335+ tests (mockall, wiremock, tokio-test) |
 | Lint | clippy + ruff (Python legacy) |
 
 ## Project Structure
 
 ```
 ContribAI/
-├── crates/contribai-rs/        ← PRIMARY: Rust v5.2.0
+├── crates/contribai-rs/        ← PRIMARY: Rust v5.3.0
 │   ├── src/
 │   │   ├── main.rs             entry point
 │   │   ├── lib.rs              library root
@@ -50,7 +51,8 @@ ContribAI/
 │   │   │   ├── client.rs       REST + GraphQL client
 │   │   │   └── discovery.rs    repo search
 │   │   ├── analysis/
-│   │   │   ├── analyzer.rs     7 analyzers
+│   │   │   ├── analyzer.rs     7 analyzers (22 file extensions)
+│   │   │   ├── ast_intel.rs    tree-sitter AST (13 languages)
 │   │   │   ├── skills.rs       17 progressive skills
 │   │   │   └── context_compressor.rs
 │   │   ├── generator/
@@ -72,8 +74,8 @@ ContribAI/
 │   │   ├── web/mod.rs          axum dashboard API
 │   │   ├── sandbox/sandbox.rs  Docker + ast fallback
 │   │   └── tools/protocol.rs  tool interface
-│   ├── Cargo.toml              v5.2.0
-│   └── tests/                 335 Rust tests
+│   ├── Cargo.toml              v5.3.0
+│   └── tests/                 335+ Rust tests
 │
 ├── python/                     LEGACY Python v4.1.0
 │   ├── contribai/              Python package (importable as 'contribai')
@@ -84,7 +86,7 @@ ContribAI/
 └── config.yaml.template        shared config template
 ```
 
-## Architecture (v5.2.0)
+## Architecture (v5.3.0)
 
 ### Core Pipeline
 ```
@@ -225,7 +227,7 @@ cd python && pytest tests/ -v       # 400+ pytest tests
 
 ## File Organization Rules
 
-- **Code files only**: ContribAI modifies `.py`, `.js`, `.ts`, `.go`, `.rs`, `.java` etc.
+- **Code files only**: ContribAI modifies `.py`, `.js`, `.ts`, `.go`, `.rs`, `.java`, `.rb`, `.php`, `.cs`, `.swift`, `.kt` etc.
 - **Never modify**: `LICENSE`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `.github/FUNDING.yml`
 - **Skip extensions**: `.md`, `.yaml`, `.json`, `.toml`, `.cfg`, `.ini`
 - **Protected meta files**: Any governance/meta files are off-limits
