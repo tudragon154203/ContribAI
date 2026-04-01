@@ -198,10 +198,22 @@ impl GeminiProvider {
     /// Returns (url, Option<bearer_token>).
     fn build_endpoint(&self) -> Result<(String, Option<String>)> {
         if !self.vertex_project.is_empty() {
-            // Vertex AI endpoint
+            // Preview models use v1beta1, stable models use v1
+            let api_version = if self.model.contains("preview") {
+                "v1beta1"
+            } else {
+                "v1"
+            };
+            // "global" uses aiplatform.googleapis.com (no region prefix)
+            // Regional uses {region}-aiplatform.googleapis.com
+            let hostname = if self.vertex_location == "global" {
+                "aiplatform.googleapis.com".to_string()
+            } else {
+                format!("{}-aiplatform.googleapis.com", self.vertex_location)
+            };
             let url = format!(
-                "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:generateContent",
-                self.vertex_location, self.vertex_project, self.vertex_location, self.model
+                "https://{}/{}/projects/{}/locations/{}/publishers/google/models/{}:generateContent",
+                hostname, api_version, self.vertex_project, self.vertex_location, self.model
             );
             let token = self.get_cached_token()?;
             Ok((url, Some(token)))
@@ -256,10 +268,23 @@ impl LlmProvider for GeminiProvider {
             .map_err(|e| ContribError::Llm(format!("Gemini HTTP error: {}", e)))?;
 
         let status = response.status();
-        let data: Value = response
-            .json()
+        let body_text = response
+            .text()
             .await
-            .map_err(|e| ContribError::Llm(format!("Gemini JSON parse: {}", e)))?;
+            .map_err(|e| ContribError::Llm(format!("Gemini response read: {}", e)))?;
+
+        let data: Value = serde_json::from_str(&body_text).map_err(|e| {
+            // Log first 500 chars of body for debugging
+            let preview = if body_text.len() > 500 {
+                &body_text[..500]
+            } else {
+                &body_text
+            };
+            ContribError::Llm(format!(
+                "Gemini JSON parse: {} — response preview: {}",
+                e, preview
+            ))
+        })?;
 
         if !status.is_success() {
             let error_msg = data["error"]["message"].as_str().unwrap_or("Unknown error");
@@ -275,9 +300,20 @@ impl LlmProvider for GeminiProvider {
             )));
         }
 
-        // Extract text from response
+        // Extract text from response — handle both single-part and multi-part
         let text = data["candidates"][0]["content"]["parts"][0]["text"]
             .as_str()
+            .or_else(|| {
+                // Some models return parts as array of text chunks
+                data["candidates"][0]["content"]["parts"]
+                    .as_array()
+                    .and_then(|parts| {
+                        parts
+                            .iter()
+                            .filter_map(|p| p["text"].as_str())
+                            .next()
+                    })
+            })
             .unwrap_or("");
 
         Ok(text.to_string())
@@ -333,13 +369,32 @@ impl LlmProvider for GeminiProvider {
             .await
             .map_err(|e| ContribError::Llm(format!("Gemini HTTP error: {}", e)))?;
 
-        let data: Value = response
-            .json()
+        let body_text = response
+            .text()
             .await
-            .map_err(|e| ContribError::Llm(format!("Gemini JSON parse: {}", e)))?;
+            .map_err(|e| ContribError::Llm(format!("Gemini response read: {}", e)))?;
+
+        let data: Value = serde_json::from_str(&body_text).map_err(|e| {
+            let preview = if body_text.len() > 500 {
+                &body_text[..500]
+            } else {
+                &body_text
+            };
+            ContribError::Llm(format!(
+                "Gemini JSON parse: {} — response preview: {}",
+                e, preview
+            ))
+        })?;
 
         let text = data["candidates"][0]["content"]["parts"][0]["text"]
             .as_str()
+            .or_else(|| {
+                data["candidates"][0]["content"]["parts"]
+                    .as_array()
+                    .and_then(|parts| {
+                        parts.iter().filter_map(|p| p["text"].as_str()).next()
+                    })
+            })
             .unwrap_or("");
 
         Ok(text.to_string())
