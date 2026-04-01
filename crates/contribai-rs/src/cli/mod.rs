@@ -381,6 +381,22 @@ impl Cli {
                     .await
                     .map_err(|e| anyhow::anyhow!("{}", e))?;
 
+                // Auto-clean PRs that returned 404
+                let mut cleaned = 0u32;
+                for err in &result.errors {
+                    if let Some(rest) = err.strip_prefix("NOT_FOUND:") {
+                        let parts: Vec<&str> = rest.rsplitn(2, ':').collect();
+                        if parts.len() == 2 {
+                            let pr_num: i64 = parts[0].parse().unwrap_or(0);
+                            let repo_name = parts[1];
+                            if pr_num > 0 {
+                                let _ = memory.update_pr_status(repo_name, pr_num, "closed");
+                                cleaned += 1;
+                            }
+                        }
+                    }
+                }
+
                 println!("\n{}", "━".repeat(50).dimmed());
                 println!(
                     "  {} PRs checked:  {}",
@@ -402,6 +418,13 @@ impl Cli {
                         "  {} Skipped:     {}",
                         "⏭".bold(),
                         result.prs_skipped.to_string().yellow()
+                    );
+                }
+                if cleaned > 0 {
+                    println!(
+                        "  {} Cleaned:     {} stale PRs removed from memory",
+                        "🗑️".bold(),
+                        cleaned.to_string().red()
                     );
                 }
                 Ok(())

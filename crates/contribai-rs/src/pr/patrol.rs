@@ -85,9 +85,24 @@ impl<'a> PrPatrol<'a> {
             {
                 Ok(_) => {}
                 Err(e) => {
-                    let msg = format!("Error patrolling PR #{}: {}", pr_number, e);
-                    warn!("{}", msg);
-                    result.errors.push(msg);
+                    let err_msg = format!("{}", e);
+                    // Auto-close PRs that return 404 (deleted repos, closed PRs, etc.)
+                    if err_msg.contains("Not found") || err_msg.contains("404") {
+                        info!(
+                            pr = pr_number,
+                            repo = repo,
+                            "🗑️ PR no longer exists, marking as closed"
+                        );
+                        result.prs_skipped += 1;
+                        // The caller (cli/mod.rs) should update memory status
+                        result
+                            .errors
+                            .push(format!("NOT_FOUND:{}:{}", repo, pr_number));
+                    } else {
+                        let msg = format!("Error patrolling PR #{}: {}", pr_number, e);
+                        warn!("{}", msg);
+                        result.errors.push(msg);
+                    }
                 }
             }
         }
