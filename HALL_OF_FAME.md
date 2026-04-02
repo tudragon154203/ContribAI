@@ -2,7 +2,7 @@
 
 > **Real pull requests created by ContribAI — merged and closed by maintainers.**
 >
-> 📊 **9 merged** · **14 closed** · **20 open** — 43 PRs across 21+ repositories
+> 📊 **10 merged** · **14 closed** · **20 open** — 44 PRs across 21+ repositories
 
 ## ✅ Merged PRs
 
@@ -35,6 +35,12 @@ These pull requests were accepted and merged by project maintainers:
 | PR | Type | Description |
 |----|------|-------------|
 | [#278](https://github.com/amanusk/s-tui/pull/278) | Quality | Unsafe handling of psutil.cpu_count() |
+
+### [HolmesGPT/holmesgpt](https://github.com/HolmesGPT/holmesgpt) — AI-powered incident investigation (2k+ ⭐)
+
+| PR | Type | Description |
+|----|------|-------------|
+| [#1816](https://github.com/HolmesGPT/holmesgpt/pull/1816) | Quality | Missing imports for uvicorn and start_http_server |
 
 ### [KnugiHK/WhatsApp-Chat-Exporter](https://github.com/KnugiHK/WhatsApp-Chat-Exporter) — WhatsApp export tool (500+ ⭐)
 
@@ -80,7 +86,7 @@ These PRs were closed without merging — reasons include: duplicate, out of sco
 | [psviderski/uncloud](https://github.com/psviderski/uncloud) | 3k+ | 3 | 🟡 Open |
 | [tinyhttp/tinyhttp](https://github.com/tinyhttp/tinyhttp) | 2k+ | 2 | 🟡 1 Open · 1 Closed |
 | [lepture/mistune](https://github.com/lepture/mistune) | 2k+ | 1 | 🟡 Open |
-| [HolmesGPT/holmesgpt](https://github.com/HolmesGPT/holmesgpt) | 2k+ | 1 | 🟡 Open |
+| [HolmesGPT/holmesgpt](https://github.com/HolmesGPT/holmesgpt) | 2k+ | 1 | ✅ Merged |
 | [elyra-ai/elyra](https://github.com/elyra-ai/elyra) | 1k+ | 1 | ❌ Closed |
 | [PharMolix/OpenBioMed](https://github.com/PharMolix/OpenBioMed) | 800+ | 1 | 🟡 Open |
 | [HumanSignal/label-studio-ml-backend](https://github.com/HumanSignal/label-studio-ml-backend) | 600+ | 1 | 🟡 Open |
@@ -94,4 +100,4 @@ These PRs were closed without merging — reasons include: duplicate, out of sco
 
 ---
 
-*Updated 2026-03-29. Stats from [tang-vu](https://github.com/tang-vu) GitHub profile and ContribAI memory.db.*
+*Updated 2026-04-02. Stats from [tang-vu](https://github.com/tang-vu) GitHub profile and ContribAI memory.db.*

@@ -11,10 +11,10 @@
 
 | Metric | Count |
 |--------|-------|
-| **PRs Submitted** | 43+ |
-| **PRs Merged** | 9 |
+| **PRs Submitted** | 44+ |
+| **PRs Merged** | 10 |
 | **Repos Contributed** | 21+ |
-| **Notable Repos** | Worldmonitor (45k⭐), Maigret (19k⭐), AI-Research-SKILLs (6k⭐), s-tui (5k⭐) |
+| **Notable Repos** | Worldmonitor (45k⭐), Maigret (19k⭐), AI-Research-SKILLs (6k⭐), s-tui (5k⭐), HolmesGPT (2k⭐) |
 
 > Set it up once, wake up to merged PRs. See the [**Hall of Fame →**](HALL_OF_FAME.md)
 
@@ -186,7 +186,7 @@ docker compose up -d dashboard scheduler  # Dashboard + scheduler
 
 | Doc | Description |
 |-----|-------------|
-| [`HALL_OF_FAME.md`](HALL_OF_FAME.md) | **9 merged** · **14 closed** across 21+ repos — real results |
+| [`HALL_OF_FAME.md`](HALL_OF_FAME.md) | **10 merged** · **14 closed** across 21+ repos — real results |
 | [`AGENTS.md`](AGENTS.md) | AI agent guide — architecture, patterns, CLI reference |
 | [`deployment-guide.md`](docs/deployment-guide.md) | Install, Docker, config, all 22 CLI commands |
 | [`system-architecture.md`](docs/system-architecture.md) | Pipeline, middleware, events, LLM routing |
