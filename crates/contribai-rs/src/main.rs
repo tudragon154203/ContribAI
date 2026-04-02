@@ -5,12 +5,13 @@ mod cli;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
+    // Initialize tracing — write to stderr so MCP stdio channel stays clean
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .with_target(false)
+        .with_writer(std::io::stderr)
         .init();
 
     let cli = cli::Cli::parse();
