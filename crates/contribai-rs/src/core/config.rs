@@ -389,6 +389,12 @@ pub struct DiscoveryConfig {
     /// Alternative YAML key: `stars_range: [50, 5000]` → sets stars_min/max.
     #[serde(default, skip_serializing)]
     pub stars_range: Option<Vec<i64>>,
+    /// Watchlist of specific repositories to analyze instead of discovering.
+    /// Each entry is "owner/repo" (e.g., "myorg/myproject").
+    /// When non-empty, `contribai watchlist` iterates these repos
+    /// using the targeted pipeline instead of search-based discovery.
+    #[serde(default)]
+    pub watchlist: Vec<String>,
 }
 
 fn default_disc_languages() -> Vec<String> {
@@ -428,6 +434,7 @@ impl Default for DiscoveryConfig {
             stars_max: default_disc_stars_max(),
             max_results: default_disc_max_results(),
             stars_range: None,
+            watchlist: Vec::new(),
         }
     }
 }
