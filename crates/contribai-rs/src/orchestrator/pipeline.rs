@@ -387,6 +387,8 @@ impl<'a> ContribPipeline<'a> {
             (500i64, 3000i64),
         ];
 
+        // Rotate sort orders across rounds for variety
+        let sort_orders = ["stars", "updated", "help-wanted-issues", "stars", "updated"];
         let langs = self.config.discovery.languages.clone();
         let all_languages = langs.clone(); // Config now includes all supported languages
 
@@ -412,12 +414,17 @@ impl<'a> ContribPipeline<'a> {
             hunt_langs.rotate_left(rotate_by);
 
             let stars = star_tiers[((rnd - 1) as usize) % star_tiers.len()];
+            let sort = sort_orders[((rnd - 1) as usize) % sort_orders.len()];
+            // Cycle through pages: round 1 → page 1, round 2 → page 2, etc.
+            let page = ((rnd - 1) / sort_orders.len() as u32) + 1;
             let criteria = DiscoveryCriteria {
                 languages: hunt_langs.iter().take(2).cloned().collect(),
                 stars_min: stars.0,
                 stars_max: stars.1,
                 min_last_activity_days: 7,
                 max_results: 10,
+                sort: Some(sort.to_string()),
+                page: Some(page),
                 ..Default::default()
             };
 

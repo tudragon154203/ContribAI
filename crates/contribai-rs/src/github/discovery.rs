@@ -30,9 +30,14 @@ impl<'a> RepoDiscovery<'a> {
         let default_criteria = self.criteria_from_config();
         let criteria = criteria.unwrap_or(&default_criteria);
 
-        // Search GitHub
-        let repos = self.search(criteria).await?;
-        info!(count = repos.len(), "Search returned repositories");
+        // Search GitHub — use sort/page from criteria for variety
+        let sort = criteria.sort.as_deref().unwrap_or("stars");
+        let page = criteria.page.unwrap_or(1);
+        let repos = self.search(criteria, sort, page).await?;
+        info!(
+            count = repos.len(),
+            sort, page, "Search returned repositories"
+        );
 
         // Filter for contribution-friendliness
         let repos = self.filter_contributable(repos, criteria).await?;
@@ -55,11 +60,18 @@ impl<'a> RepoDiscovery<'a> {
             require_contributing_guide: false,
             topics: Vec::new(),
             exclude_repos: Vec::new(),
+            sort: None,
+            page: None,
         }
     }
 
     /// Build and execute GitHub search query.
-    async fn search(&self, criteria: &DiscoveryCriteria) -> Result<Vec<Repository>> {
+    async fn search(
+        &self,
+        criteria: &DiscoveryCriteria,
+        sort: &str,
+        page: u32,
+    ) -> Result<Vec<Repository>> {
         let mut all_repos: Vec<Repository> = Vec::new();
 
         for language in &criteria.languages {
@@ -82,12 +94,12 @@ impl<'a> RepoDiscovery<'a> {
             }
 
             let query = query_parts.join(" ");
-            debug!(query = %query, "Search query");
+            debug!(query = %query, sort, page, "Search query");
 
             let per_page = (criteria.max_results * 2).min(30) as u32;
             let repos = self
                 .client
-                .search_repositories(&query, "stars", per_page)
+                .search_repositories(&query, sort, per_page, page)
                 .await?;
             all_repos.extend(repos);
         }

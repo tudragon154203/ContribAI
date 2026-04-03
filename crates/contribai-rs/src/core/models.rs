@@ -348,6 +348,12 @@ pub struct DiscoveryCriteria {
     pub max_results: usize,
     #[serde(default)]
     pub exclude_repos: Vec<String>,
+    /// GitHub search sort order (stars, updated, recently-created).
+    #[serde(default)]
+    pub sort: Option<String>,
+    /// GitHub search page number (1-indexed) for pagination variety.
+    #[serde(default)]
+    pub page: Option<u32>,
 }
 
 fn default_languages() -> Vec<String> {
@@ -377,6 +383,8 @@ impl Default for DiscoveryCriteria {
             topics: Vec::new(),
             max_results: default_max_results(),
             exclude_repos: Vec::new(),
+            sort: None,
+            page: None,
         }
     }
 }

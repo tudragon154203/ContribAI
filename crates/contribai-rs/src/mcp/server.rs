@@ -492,7 +492,7 @@ async fn handle_tool_call(
             );
 
             let repos = github
-                .search_repositories(&query, "updated", limit as u32)
+                .search_repositories(&query, "updated", limit as u32, 1)
                 .await?;
             Ok(json!(repos))
         }

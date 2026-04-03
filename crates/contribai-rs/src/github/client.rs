@@ -265,8 +265,10 @@ impl GitHubClient {
         query: &str,
         sort: &str,
         per_page: u32,
+        page: u32,
     ) -> Result<Vec<Repository>> {
         let pp = per_page.to_string();
+        let pg = page.to_string();
         let data = self
             .get_with_params(
                 "/search/repositories",
@@ -275,6 +277,7 @@ impl GitHubClient {
                     ("sort", sort),
                     ("order", "desc"),
                     ("per_page", &pp),
+                    ("page", &pg),
                 ],
             )
             .await?;
