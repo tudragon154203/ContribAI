@@ -74,14 +74,7 @@ impl<'a> PrPatrol<'a> {
     ) {
         if let Some(mem) = self.memory {
             if let Err(e) = mem.record_conversation(
-                repo,
-                pr_number,
-                role,
-                author,
-                body,
-                comment_id,
-                is_inline,
-                file_path,
+                repo, pr_number, role, author, body, comment_id, is_inline, file_path,
             ) {
                 tracing::debug!("Failed to save conversation: {}", e);
             }
@@ -299,7 +292,14 @@ impl<'a> PrPatrol<'a> {
                 // v5.4: Save to conversation memory
                 let full_repo = format!("{}/{}", owner, repo);
                 self.save_conversation(
-                    &full_repo, pr_number, "maintainer", login, body, comment_id, false, None,
+                    &full_repo,
+                    pr_number,
+                    "maintainer",
+                    login,
+                    body,
+                    comment_id,
+                    false,
+                    None,
                 );
             }
         }
@@ -344,7 +344,13 @@ impl<'a> PrPatrol<'a> {
                 // v5.4: Save to conversation memory
                 let full_repo = format!("{}/{}", owner, repo);
                 self.save_conversation(
-                    &full_repo, pr_number, "maintainer", login, body, comment_id, true,
+                    &full_repo,
+                    pr_number,
+                    "maintainer",
+                    login,
+                    body,
+                    comment_id,
+                    true,
                     file_path_str,
                 );
             }

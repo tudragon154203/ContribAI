@@ -951,27 +951,26 @@ impl<'a> ContribPipeline<'a> {
         let findings = self.filter_findings(&analysis, &all_past_titles);
 
         // ── v5.4: Dream profile — skip rejected contribution types ──────
-        let findings: Vec<_> = if let Ok(Some(profile)) =
-            self.memory.get_repo_profile(&repo.full_name)
-        {
-            if !profile.rejected_types.is_empty() {
-                info!(
-                    repo = %repo.full_name,
-                    rejected = ?profile.rejected_types,
-                    merge_rate = profile.merge_rate,
-                    "🧠 Dream profile loaded — filtering rejected types"
-                );
-            }
-            findings
-                .into_iter()
-                .filter(|f| {
-                    let ftype = f.finding_type.to_string();
-                    !profile.rejected_types.iter().any(|r| r == &ftype)
-                })
-                .collect()
-        } else {
-            findings
-        };
+        let findings: Vec<_> =
+            if let Ok(Some(profile)) = self.memory.get_repo_profile(&repo.full_name) {
+                if !profile.rejected_types.is_empty() {
+                    info!(
+                        repo = %repo.full_name,
+                        rejected = ?profile.rejected_types,
+                        merge_rate = profile.merge_rate,
+                        "🧠 Dream profile loaded — filtering rejected types"
+                    );
+                }
+                findings
+                    .into_iter()
+                    .filter(|f| {
+                        let ftype = f.finding_type.to_string();
+                        !profile.rejected_types.iter().any(|r| r == &ftype)
+                    })
+                    .collect()
+            } else {
+                findings
+            };
 
         info!(
             repo = %repo.full_name,
@@ -1258,7 +1257,9 @@ impl<'a> ContribPipeline<'a> {
             let mut ctx_with_files = repo_context.clone();
             for finding in &findings {
                 if !finding.file_path.is_empty()
-                    && !ctx_with_files.relevant_files.contains_key(&finding.file_path)
+                    && !ctx_with_files
+                        .relevant_files
+                        .contains_key(&finding.file_path)
                 {
                     if let Ok(content) = self
                         .github
@@ -1278,18 +1279,15 @@ impl<'a> ContribPipeline<'a> {
                 match generator.generate(finding, &ctx_with_files).await {
                     Ok(Some(mut contribution)) => {
                         // Inject `Fixes #N` into description
-                        contribution.description = format!(
-                            "Fixes #{}\n\n{}",
-                            issue.number, contribution.description
-                        );
+                        contribution.description =
+                            format!("Fixes #{}\n\n{}", issue.number, contribution.description);
                         valid.push(contribution);
                     }
                     Ok(None) => {}
                     Err(e) => {
-                        result.errors.push(format!(
-                            "Issue #{} generation error: {}",
-                            issue.number, e
-                        ));
+                        result
+                            .errors
+                            .push(format!("Issue #{} generation error: {}", issue.number, e));
                     }
                 }
             }

@@ -846,13 +846,9 @@ impl Cli {
                     );
 
                     // Solve: issue → findings
-                    let findings =
-                        solver.solve_issue_deep(issue, &repo, &repo_context).await;
+                    let findings = solver.solve_issue_deep(issue, &repo, &repo_context).await;
                     if findings.is_empty() {
-                        println!(
-                            "    {} No actionable findings",
-                            "⚠️".dimmed()
-                        );
+                        println!("    {} No actionable findings", "⚠️".dimmed());
                         continue;
                     }
 
@@ -861,8 +857,9 @@ impl Cli {
                     for f in &findings {
                         if !f.file_path.is_empty() && !ctx.relevant_files.contains_key(&f.file_path)
                         {
-                            if let Ok(content) =
-                                github.get_file_content(&owner, &name, &f.file_path, None).await
+                            if let Ok(content) = github
+                                .get_file_content(&owner, &name, &f.file_path, None)
+                                .await
                             {
                                 ctx.relevant_files.insert(f.file_path.clone(), content);
                             }
@@ -872,9 +869,7 @@ impl Cli {
                     // Generate code for each finding
                     let mut valid = Vec::new();
                     for finding in &findings {
-                        if let Ok(Some(mut contrib)) =
-                            generator.generate(finding, &ctx).await
-                        {
+                        if let Ok(Some(mut contrib)) = generator.generate(finding, &ctx).await {
                             contrib.description =
                                 format!("Fixes #{}\n\n{}", issue.number, contrib.description);
                             valid.push(contrib);
@@ -888,9 +883,9 @@ impl Cli {
 
                     // Merge into single PR
                     let file_count = valid.iter().map(|c| c.changes.len()).sum::<usize>();
-                    let mut merged = contribai::orchestrator::pipeline::merge_contributions_pub(valid);
-                    merged.title =
-                        format!("fix: resolve #{} — {}", issue.number, issue.title);
+                    let mut merged =
+                        contribai::orchestrator::pipeline::merge_contributions_pub(valid);
+                    merged.title = format!("fix: resolve #{} — {}", issue.number, issue.title);
                     merged.commit_message = format!(
                         "fix: resolve #{} — {}\n\nFixes #{}",
                         issue.number, issue.title, issue.number
@@ -926,11 +921,7 @@ impl Cli {
                             );
                         }
                         Err(e) => {
-                            println!(
-                                "    {} PR failed: {}",
-                                "❌".bold(),
-                                format!("{}", e).red()
-                            );
+                            println!("    {} PR failed: {}", "❌".bold(), format!("{}", e).red());
                         }
                     }
                 }
@@ -946,10 +937,7 @@ impl Cli {
                 } else if dry_run {
                     println!("  {} Dry run — no PRs submitted.", "[DRY RUN]".yellow());
                 } else {
-                    println!(
-                        "  {} No PRs could be generated.",
-                        "⚠️".bold()
-                    );
+                    println!("  {} No PRs could be generated.", "⚠️".bold());
                 }
                 Ok(())
             }
