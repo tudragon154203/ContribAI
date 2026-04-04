@@ -890,13 +890,32 @@ impl LlmProvider for OllamaProvider {
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
-/// Create an LLM provider instance from config.
+/// Create an LLM provider instance from config, wrapped with retry logic.
 pub fn create_llm_provider(config: &LlmConfig) -> Result<Box<dyn LlmProvider>> {
+    use super::retry::RetryingProvider;
+
+    let base: Box<dyn LlmProvider> = match config.provider.as_str() {
+        "gemini" | "vertex" => Ok(Box::new(GeminiProvider::new(config)?) as Box<dyn LlmProvider>),
+        "openai" => Ok(Box::new(OpenAIProvider::new(config)?) as Box<dyn LlmProvider>),
+        "anthropic" => Ok(Box::new(AnthropicProvider::new(config)?) as Box<dyn LlmProvider>),
+        "ollama" => Ok(Box::new(OllamaProvider::new(config)?) as Box<dyn LlmProvider>),
+        other => Err(ContribError::Llm(format!(
+            "Unknown LLM provider: {}. Available: gemini, vertex, openai, anthropic, ollama",
+            other
+        ))),
+    }?;
+
+    // Wrap with retry (3 retries, 1s base delay)
+    Ok(Box::new(RetryingProvider::with_config(base, 3, 1000)))
+}
+
+/// Create an LLM provider WITHOUT retry wrapper (for tests or perf-sensitive paths).
+pub fn create_llm_provider_raw(config: &LlmConfig) -> Result<Box<dyn LlmProvider>> {
     match config.provider.as_str() {
-        "gemini" | "vertex" => Ok(Box::new(GeminiProvider::new(config)?)),
-        "openai" => Ok(Box::new(OpenAIProvider::new(config)?)),
-        "anthropic" => Ok(Box::new(AnthropicProvider::new(config)?)),
-        "ollama" => Ok(Box::new(OllamaProvider::new(config)?)),
+        "gemini" | "vertex" => Ok(Box::new(GeminiProvider::new(config)?) as Box<dyn LlmProvider>),
+        "openai" => Ok(Box::new(OpenAIProvider::new(config)?) as Box<dyn LlmProvider>),
+        "anthropic" => Ok(Box::new(AnthropicProvider::new(config)?) as Box<dyn LlmProvider>),
+        "ollama" => Ok(Box::new(OllamaProvider::new(config)?) as Box<dyn LlmProvider>),
         other => Err(ContribError::Llm(format!(
             "Unknown LLM provider: {}. Available: gemini, vertex, openai, anthropic, ollama",
             other

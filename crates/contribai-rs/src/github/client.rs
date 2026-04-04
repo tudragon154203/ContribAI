@@ -14,6 +14,8 @@ use tracing::{info, warn};
 use crate::core::error::{ContribError, Result};
 use crate::core::models::{FileNode, Issue, Repository};
 
+use std::sync::atomic::{AtomicU32, Ordering};
+
 const GITHUB_API: &str = "https://api.github.com";
 
 /// Async GitHub REST API client.
@@ -22,6 +24,18 @@ pub struct GitHubClient {
     #[allow(dead_code)]
     token: String,
     rate_limit_buffer: u32,
+    /// Tracked remaining rate limit from response headers.
+    rate_remaining: AtomicU32,
+    /// Rate limit reset timestamp (Unix epoch seconds).
+    rate_reset_at: AtomicU32,
+}
+
+/// Snapshot of current GitHub API rate limit status.
+#[derive(Debug, Clone)]
+pub struct RateLimitStatus {
+    pub remaining: u32,
+    pub reset_at: u32,
+    pub is_low: bool,
 }
 
 impl GitHubClient {
@@ -41,7 +55,7 @@ impl GitHubClient {
             "X-GitHub-Api-Version",
             HeaderValue::from_static("2022-11-28"),
         );
-        headers.insert(USER_AGENT, HeaderValue::from_static("ContribAI/5.0"));
+        headers.insert(USER_AGENT, HeaderValue::from_static("ContribAI/5.6"));
 
         let client = Client::builder()
             .default_headers(headers)
@@ -53,7 +67,60 @@ impl GitHubClient {
             client,
             token: token.to_string(),
             rate_limit_buffer,
+            rate_remaining: AtomicU32::new(5000),
+            rate_reset_at: AtomicU32::new(0),
         })
+    }
+
+    /// Get current rate limit status.
+    pub fn get_rate_status(&self) -> RateLimitStatus {
+        let remaining = self.rate_remaining.load(Ordering::Relaxed);
+        let reset_at = self.rate_reset_at.load(Ordering::Relaxed);
+        RateLimitStatus {
+            remaining,
+            reset_at,
+            is_low: remaining < 100,
+        }
+    }
+
+    /// Update tracked rate limit from response headers.
+    fn track_rate_limit(&self, response: &Response) {
+        if let Some(remaining) = response
+            .headers()
+            .get("x-ratelimit-remaining")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u32>().ok())
+        {
+            self.rate_remaining.store(remaining, Ordering::Relaxed);
+        }
+        if let Some(reset) = response
+            .headers()
+            .get("x-ratelimit-reset")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u32>().ok())
+        {
+            self.rate_reset_at.store(reset, Ordering::Relaxed);
+        }
+    }
+
+    /// Sleep if rate limit is critically low (< buffer threshold).
+    async fn maybe_throttle(&self) {
+        let remaining = self.rate_remaining.load(Ordering::Relaxed);
+        if remaining > 0 && remaining < self.rate_limit_buffer {
+            let reset = self.rate_reset_at.load(Ordering::Relaxed);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as u32;
+            let wait = if reset > now { reset - now } else { 30 };
+            let wait = wait.min(120); // Cap at 2 minutes
+            warn!(
+                remaining,
+                reset_in_secs = wait,
+                "⏳ GitHub rate limit low, throttling"
+            );
+            tokio::time::sleep(std::time::Duration::from_secs(wait as u64)).await;
+        }
     }
 
     // ── Core HTTP ──────────────────────────────────────────────────────────
@@ -66,6 +133,9 @@ impl GitHubClient {
         params: Option<&[(&str, &str)]>,
         json_body: Option<&Value>,
     ) -> Result<Value> {
+        // v5.6: Proactive throttle before request
+        self.maybe_throttle().await;
+
         let full_url = if url.starts_with("http") {
             url.to_string()
         } else {
@@ -91,6 +161,9 @@ impl GitHubClient {
                 .map_err(|e| ContribError::GitHub(format!("HTTP error: {}", e)))?;
 
             let status = response.status();
+
+            // v5.6: Track rate limit from every response
+            self.track_rate_limit(&response);
 
             // Rate limit check
             if status == StatusCode::FORBIDDEN {
