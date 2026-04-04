@@ -547,7 +547,11 @@ impl<'a> ContribPipeline<'a> {
             // Filter to repos that merge external PRs
             let mut targets: Vec<Repository> = Vec::new();
             for repo in repos.iter().take(5) {
-                if self.memory.has_analyzed_since(&repo.full_name, 7).unwrap_or(false) {
+                if self
+                    .memory
+                    .has_analyzed_since(&repo.full_name, 7)
+                    .unwrap_or(false)
+                {
                     continue;
                 }
                 if let Ok(prs) = self
@@ -769,7 +773,11 @@ impl<'a> ContribPipeline<'a> {
                     let (owner, repo_name) = (parts[parts.len() - 2], parts[parts.len() - 1]);
                     let full_name = format!("{owner}/{repo_name}");
 
-                    if self.memory.has_analyzed_since(&full_name, 7).unwrap_or(false) {
+                    if self
+                        .memory
+                        .has_analyzed_since(&full_name, 7)
+                        .unwrap_or(false)
+                    {
                         continue;
                     }
 

@@ -361,9 +361,7 @@ impl Cli {
                 );
                 pipeline.set_approve_high_risk(approve);
 
-                let total = pipeline
-                    .hunt(rounds, delay as u64, dry_run, "both")
-                    .await?;
+                let total = pipeline.hunt(rounds, delay as u64, dry_run, "both").await?;
 
                 print_result(&total, dry_run);
                 Ok(())
