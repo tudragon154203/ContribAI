@@ -1,6 +1,6 @@
 # Deployment Guide
 
-**Version:** 5.4.2 | **Language:** Rust | **Last Updated:** 2026-04-04
+**Version:** 5.5.0 | **Language:** Rust | **Last Updated:** 2026-04-04
 
 ---
 
@@ -59,7 +59,7 @@ docker compose up -d dashboard scheduler
 ```bash
 # Install to PATH (recommended)
 cargo install --path crates/contribai-rs
-contribai --version  # 5.4.2
+contribai --version  # 5.5.0
 contribai --help
 
 # Or run directly from build output:
@@ -117,10 +117,10 @@ ENTRYPOINT ["contribai"]
 
 ```bash
 # Build image
-docker build -t contribai:5.4.2 .
+docker build -t contribai:5.5.0 .
 
 # Run
-docker run --rm contribai:5.4.2 --help
+docker run --rm contribai:5.5.0 --help
 ```
 
 ### Method 3: Kubernetes (Enterprise)

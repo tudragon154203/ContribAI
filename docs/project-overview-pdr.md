@@ -1,6 +1,6 @@
 # ContribAI — Project Overview & PDR
 
-**Version:** 5.4.2 | **License:** AGPL-3.0 + Commons Clause | **Status:** Active Development
+**Version:** 5.5.0 | **License:** AGPL-3.0 + Commons Clause | **Status:** Active Development
 
 ---
 
@@ -8,7 +8,7 @@
 
 **ContribAI** is an autonomous AI agent written in Rust that discovers open source repositories on GitHub, analyzes them for improvement opportunities, generates high-quality code fixes, and submits Pull Requests — all without human intervention. It bridges the gap between maintainer bandwidth constraints and contributor availability by delivering production-grade contributions at scale.
 
-**v5.4.2** is the full Rust rewrite: ~4.5 MB single binary, ~5ms startup, 40+ CLI commands, interactive TUI, real notification delivery, watchlist mode, dream memory consolidation, and risk classification system.
+**v5.5.0** is the full Rust rewrite: ~4.5 MB single binary, ~5ms startup, 40+ CLI commands, interactive TUI, real notification delivery, watchlist mode, dream memory consolidation, and risk classification system.
 
 ---
 
@@ -305,7 +305,7 @@ Autonomous, safe, high-quality code contributions that:
 
 ### Recent Releases
 
-- **v5.4.2** (2026-04-04) — Risk classification, auto-clean 404 PRs, YAML list fix, MCP stdout fix, conversation-aware patrol
+- **v5.5.0** (2026-04-04) — Risk classification, auto-clean 404 PRs, YAML list fix, MCP stdout fix, conversation-aware patrol
 - **v5.4.0** (2026-04-03) — Dream memory consolidation + risk classification system
 - **v5.3.0** (2026-04-02) — 13-language AST, all-language discovery, Gemini 3.x
 - **v5.2.0** (2026-04-01) — Interactive TUI, real notifications, 40+ commands, 355 tests
@@ -362,5 +362,5 @@ Autonomous, safe, high-quality code contributions that:
 
 - **Created:** 2026-03-28
 - **Last Updated:** 2026-04-04
-- **Version:** 5.4.2 (Rust — Watchlist, Dream Memory, Risk Classification, Conversation-Aware Patrol)
+- **Version:** 5.5.0 (Rust — Watchlist, Dream Memory, Risk Classification, Conversation-Aware Patrol)
 - **Related:** README.md, AGENTS.md, docs/ARCHITECTURE.md, docs/system-architecture.md

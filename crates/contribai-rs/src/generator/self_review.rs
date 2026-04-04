@@ -86,6 +86,59 @@ impl ContributionGenerator<'_> {
             }
         }
     }
+
+    /// Verify that the original finding is a real issue (not a false positive).
+    ///
+    /// Asks the LLM to evaluate whether the finding describes an actual bug
+    /// or if it was hallucinated by the analysis step. Defaults to `true`
+    /// (assumed real) on LLM failure to avoid blocking legitimate fixes.
+    pub(crate) async fn verify_finding(
+        &self,
+        contribution: &Contribution,
+        context: &RepoContext,
+    ) -> bool {
+        let finding = &contribution.finding;
+        let file_content = context
+            .relevant_files
+            .get(&finding.file_path)
+            .map(|s| safe_truncate(s, 4000))
+            .unwrap_or_default();
+
+        let prompt = format!(
+            "You are a senior code reviewer. Determine if this finding is a REAL issue.\n\n\
+             **File**: `{}`\n\
+             **Finding**: {}\n\
+             **Suggestion**: {}\n\n\
+             ```\n{}\n```\n\n\
+             Consider:\n\
+             1. Could this be intentional behavior?\n\
+             2. Is there context that makes this correct as-is?\n\
+             3. Would a maintainer agree this needs changing?\n\n\
+             Reply REAL_BUG or FALSE_POSITIVE with one-line reasoning.",
+            finding.file_path,
+            finding.description,
+            finding.suggestion.as_deref().unwrap_or("N/A"),
+            file_content,
+        );
+
+        match self.llm.complete(&prompt, None, Some(0.1), None).await {
+            Ok(response) => {
+                let is_real = !response.to_uppercase().contains("FALSE_POSITIVE");
+                if !is_real {
+                    info!(
+                        finding = %finding.title,
+                        reasoning = %&response[..response.len().min(200)],
+                        "Bug verification: FALSE_POSITIVE"
+                    );
+                }
+                is_real
+            }
+            Err(e) => {
+                warn!(error = %e, "Bug verification LLM call failed, assuming real");
+                true
+            }
+        }
+    }
 }
 
 /// Build a simple diff string between two text blobs for LLM self-review.

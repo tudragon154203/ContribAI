@@ -467,6 +467,19 @@ pub struct PipelineConfig {
     /// Risk tolerance for auto-submission: "low", "medium" (default), "high".
     #[serde(default = "default_risk_tolerance")]
     pub risk_tolerance: String,
+    /// Skip docs-only PRs unless repo explicitly accepts them (default: true).
+    #[serde(default = "default_true")]
+    pub skip_docs_prs: bool,
+    /// Require LLM bug verification before PR creation (default: true).
+    #[serde(default = "default_true")]
+    pub require_bug_verification: bool,
+    /// Skip repos that already have an open PR from us (default: true).
+    #[serde(default = "default_true")]
+    pub skip_repos_with_open_pr: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_max_retries() -> u32 {
@@ -494,6 +507,9 @@ impl Default for PipelineConfig {
             max_repos_per_run: default_max_repos_per_run(),
             max_concurrent_repos: default_max_concurrent_repos(),
             risk_tolerance: default_risk_tolerance(),
+            skip_docs_prs: true,
+            require_bug_verification: true,
+            skip_repos_with_open_pr: true,
         }
     }
 }

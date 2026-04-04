@@ -1,12 +1,12 @@
 # Project Roadmap
 
-**Current Version:** 5.4.2 | **Release Date:** 2026-04-04 | **Status:** Active Development
+**Current Version:** 5.5.0 | **Release Date:** 2026-04-04 | **Status:** Active Development
 
 ---
 
 ## Executive Summary
 
-ContribAI is a mature autonomous AI contribution system. Originally built in Python (v0.x–v4.0), it was rewritten in Rust (v5.0.0) for performance, safety, and new capabilities like tree-sitter AST parsing and PageRank file ranking. v5.2.0 added an interactive TUI and full CLI parity. v5.3.0 introduced watchlist mode and 13-language AST. v5.4.0+ adds dream memory consolidation and risk classification. The roadmap focuses on leveraging Rust's advantages for production maturity and ecosystem expansion.
+ContribAI is a mature autonomous AI contribution system. Originally built in Python (v0.x–v4.0), it was rewritten in Rust (v5.0.0) for performance, safety, and new capabilities like tree-sitter AST parsing and PageRank file ranking. v5.2.0 added an interactive TUI and full CLI parity. v5.3.0 introduced watchlist mode and 13-language AST. v5.4.0 added dream memory consolidation and risk classification. v5.5.0 delivers multi-file PRs, end-to-end issue solving, and conversation memory. The roadmap focuses on integration testing, merge rate optimization, and advanced analysis.
 
 ---
 
@@ -133,9 +133,19 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 - ✓ 65 .rs files, ~26,000+ LOC, **355 tests**
 - ✓ 40+ CLI commands (expanded from 22)
 
+### v5.5.0 (2026-04-04) — Multi-File PRs, Issue Solver, Conversation Memory ✓
+
+**Key Achievements (v5.5.0):**
+- ✓ Multi-file PR batching: pipeline merges related findings into single multi-file PR
+- ✓ Issue solver end-to-end: `solve` command generates code + creates PRs with `Fixes #N` linking
+- ✓ PR conversation memory: patrol stores full threads in SQLite, injects history for context-aware LLM responses
+- ✓ Dream profile wiring: pipeline filters rejected contribution types using repo outcome history
+- ✓ Auto-dream trigger on `run_targeted()` path
+- ✓ 66 .rs files, ~28,000 LOC, **355 tests**
+
 ---
 
-## Feature Status Matrix (v5.4.2)
+## Feature Status Matrix (v5.5.0)
 
 ### Core Pipeline
 
@@ -222,37 +232,45 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 - ✓ Python moved to `python/` legacy, root Cargo workspace
 - ✓ 335 tests
 
-### Milestone 6: Advanced Features (v5.3.0–v5.4.2) ✓
+### Milestone 6: Advanced Features (v5.3.0–v5.5.0) ✓
 - ✓ Watchlist mode for targeted repo scanning
 - ✓ 13-language AST support (expanded from 8)
 - ✓ Dream memory consolidation for efficiency
 - ✓ Risk classification for intelligent auto-submit
 - ✓ Conversation-aware PR patrol with context
 - ✓ Auto-clean 404 PRs from patrol
-- ✓ 40+ CLI commands, 355 tests, 65 .rs files, ~26,000+ LOC
+- ✓ Multi-file PR batching
+- ✓ Issue solver end-to-end with `Fixes #N` linking
+- ✓ PR conversation memory for context-aware responses
+- ✓ 40+ CLI commands, 355 tests, 66 .rs files, ~28,000 LOC
 
 ---
 
-## Planned Features (v5.5.0+)
+## Planned Features (v5.6.0+)
 
-### v5.5.0 — Enterprise Scalability (Q2 2026)
+### v5.6.0 — Integration Tests & Merge Rate (Q2 2026)
+
+- [ ] Integration test framework (wiremock + MockLlm)
+- [ ] 20+ integration tests for critical pipeline paths
+- [ ] Closed-PR failure analysis + merge rate improvements
+- [ ] DB indexes for hot query paths
+- [ ] Enhanced quality scoring based on outcome learning
+
+### v5.7.0 — Advanced Analysis (Q3 2026)
+
+- [ ] Semantic code chunking (not truncation)
+- [ ] Enhanced tree-sitter analysis (cross-file reference resolution)
+- [ ] Type-aware code generation hints
+
+### v5.8.0 — Enterprise Scalability (Q3 2026)
 
 - [ ] PostgreSQL migration layer (drop-in SQLite replacement)
 - [ ] Redis-based distributed rate limiting
 - [ ] Prometheus metrics export
 - [ ] OpenTelemetry distributed tracing
 - [ ] Kubernetes Helm charts
-- [ ] Multi-region deployment patterns
 
-### v5.6.0 — Advanced Analysis (Q3 2026)
-
-- [ ] Semantic code chunking (not truncation)
-- [ ] Code2Vec embeddings for similarity
-- [ ] Multi-turn LLM conversations for complex reasoning
-- [ ] Enhanced tree-sitter analysis (cross-file reference resolution)
-- [ ] Type-aware code generation
-
-### v5.7.0 — Plugin Ecosystem (Q4 2026)
+### v5.9.0 — Plugin Ecosystem (Q4 2026)
 
 - [ ] Central plugin registry (GitHub-based)
 - [ ] Plugin package format (dynamic Rust libraries / WASM)
@@ -281,11 +299,11 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 
 ### Remaining
 
-| Item | Effort | Priority |
-|------|--------|----------|
-| Add database indexes for performance | Small | High |
-| Implement integration test suite | Medium | High |
-| Add structured OpenTelemetry spans | Medium | Medium |
+| Item | Effort | Priority | Status |
+|------|--------|----------|--------|
+| Add database indexes for performance | Small | High | ✓ Done (v5.6.0) |
+| Implement integration test suite | Medium | High | Planned (v5.6.0) |
+| Add structured OpenTelemetry spans | Medium | Medium | Planned (v5.8.0) |
 
 ---
 
@@ -305,10 +323,10 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 
 ## Success Metrics
 
-| Metric | v4.0 (Python) | v5.0 (Rust) | v5.4.2 (Current) |
-|--------|---------------|-------------|----------------|
-| **LOC** | ~5,500 | ~21,400 | ~26,000+ |
-| **Files** | 45 | 63 | **65** |
+| Metric | v4.0 (Python) | v5.0 (Rust) | v5.5.0 (Current) |
+|--------|---------------|-------------|------------------|
+| **LOC** | ~5,500 | ~21,400 | ~28,000 |
+| **Files** | 45 | 63 | **66** |
 | **Test count** | ~298 | 323 | **355** |
 | **Binary size** | N/A (interpreted) | ~15MB static | ~4.5MB stripped |
 | **Startup time** | ~2s | <100ms | ~5ms |
@@ -324,5 +342,5 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 
 - **Created:** 2026-03-28
 - **Last Updated:** 2026-04-04
-- **Version:** 5.4.2 (Watchlist, Dream Memory, Risk Classification, Conversation-Aware Patrol)
+- **Version:** 5.5.0 (Multi-file PRs, Issue Solver, Conversation Memory, Dream Profile Wiring)
 - **Next Review:** 2026-06-30 (Q2 end)

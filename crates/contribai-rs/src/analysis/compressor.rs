@@ -122,6 +122,94 @@ impl ContextCompressor {
         )
     }
 
+    // ── Semantic Chunking (v5.6) ──────────────────────────────────────────────
+
+    /// Split file content at function/class boundaries using AST symbols.
+    ///
+    /// Each chunk is a complete syntactic unit (no mid-function cuts).
+    /// Falls back to `truncate_middle` if no symbols are available.
+    pub fn semantic_chunk(
+        content: &str,
+        symbols: &[crate::core::models::Symbol],
+        max_tokens_per_chunk: usize,
+    ) -> Vec<String> {
+        let max_chars = max_tokens_per_chunk * CHARS_PER_TOKEN;
+        let lines: Vec<&str> = content.lines().collect();
+
+        if symbols.is_empty() || lines.is_empty() {
+            // Fallback: single chunk with truncation
+            if content.len() <= max_chars {
+                return vec![content.to_string()];
+            }
+            return vec![Self::truncate_middle(content, max_chars)];
+        }
+
+        // Extract import lines as context header (lines before first symbol)
+        let first_sym_line = symbols.iter().map(|s| s.line_start).min().unwrap_or(0);
+        let header: String = lines[..first_sym_line.min(lines.len())]
+            .iter()
+            .filter(|l| {
+                let trimmed = l.trim();
+                trimmed.starts_with("use ")
+                    || trimmed.starts_with("import ")
+                    || trimmed.starts_with("from ")
+                    || trimmed.starts_with("require(")
+                    || trimmed.starts_with("package ")
+                    || trimmed.starts_with("#include")
+            })
+            .copied()
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let header_len = header.len() + 2; // +2 for newlines
+
+        // Sort symbols by line_start
+        let mut sorted: Vec<_> = symbols
+            .iter()
+            .filter(|s| s.line_start < lines.len())
+            .collect();
+        sorted.sort_by_key(|s| s.line_start);
+
+        // Greedily pack symbol ranges into chunks
+        let mut chunks: Vec<String> = Vec::new();
+        let mut current_chunk_parts: Vec<String> = Vec::new();
+        let mut current_size = header_len;
+
+        for sym in &sorted {
+            let start = sym.line_start.min(lines.len());
+            let end = (sym.line_end + 1).min(lines.len());
+            let block = lines[start..end].join("\n");
+            let block_len = block.len() + 1;
+
+            if current_size + block_len > max_chars && !current_chunk_parts.is_empty() {
+                // Flush current chunk
+                let mut chunk = header.clone();
+                chunk.push('\n');
+                chunk.push_str(&current_chunk_parts.join("\n"));
+                chunks.push(chunk);
+                current_chunk_parts.clear();
+                current_size = header_len;
+            }
+
+            current_chunk_parts.push(block);
+            current_size += block_len;
+        }
+
+        // Flush remaining
+        if !current_chunk_parts.is_empty() {
+            let mut chunk = header.clone();
+            chunk.push('\n');
+            chunk.push_str(&current_chunk_parts.join("\n"));
+            chunks.push(chunk);
+        }
+
+        if chunks.is_empty() {
+            chunks.push(content.chars().take(max_chars).collect());
+        }
+
+        chunks
+    }
+
     /// Compact finding summary for prompt injection.
     pub fn summarize_findings_compact(findings: &[crate::core::models::Finding]) -> String {
         if findings.is_empty() {

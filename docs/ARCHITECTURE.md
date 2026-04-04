@@ -1,6 +1,6 @@
 # Architecture
 
-ContribAI v5.4.2 — Rust-native autonomous contribution agent.
+ContribAI v5.5.0 — Rust-native autonomous contribution agent.
 
 ## System Overview
 
@@ -135,7 +135,7 @@ for each open PR:
     4. Maintain conversation context for intelligent responses
     5. Generate fix via LLM → push commit
     6. Respond to questions via LLM
-    7. Auto-clean 404 PRs (v5.4.2)
+    7. Auto-clean 404 PRs (v5.5.0)
 ```
 
 ## Middleware Chain

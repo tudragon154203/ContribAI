@@ -246,6 +246,40 @@ impl<'a> ContributionGenerator<'a> {
             }
         }
 
+        // v5.6: Type-aware generation — inject type signatures of referenced symbols
+        {
+            let type_sigs: Vec<String> = context
+                .symbol_map
+                .values()
+                .flatten()
+                .filter(|s| {
+                    matches!(
+                        s.kind,
+                        crate::core::models::SymbolKind::Function
+                            | crate::core::models::SymbolKind::Struct
+                            | crate::core::models::SymbolKind::Interface
+                            | crate::core::models::SymbolKind::Class
+                    )
+                })
+                .take(20)
+                .map(|s| {
+                    format!(
+                        "{:?} {} ({}:L{}-L{})",
+                        s.kind, s.name, s.file_path, s.line_start, s.line_end
+                    )
+                })
+                .collect();
+
+            if !type_sigs.is_empty() {
+                let joined = type_sigs.join("\n");
+                let ctx = safe_truncate(&joined, 2000);
+                prompt.push_str(&format!(
+                    "\n## Type Context (referenced symbols)\n```\n{}\n```\n\n",
+                    ctx
+                ));
+            }
+        }
+
         prompt.push_str("\n## Output Format\nReturn your changes as a JSON object.\n\n");
 
         if !current_content.is_empty() {

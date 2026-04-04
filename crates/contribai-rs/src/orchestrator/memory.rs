@@ -127,6 +127,15 @@ CREATE TABLE IF NOT EXISTS pr_conversations (
     created_at  TEXT,
     UNIQUE(repo, pr_number, comment_id)
 );
+
+-- Indexes for hot query paths
+CREATE INDEX IF NOT EXISTS idx_submitted_prs_created_at ON submitted_prs(created_at);
+CREATE INDEX IF NOT EXISTS idx_submitted_prs_status ON submitted_prs(status);
+CREATE INDEX IF NOT EXISTS idx_pr_conversations_repo_pr ON pr_conversations(repo, pr_number);
+CREATE INDEX IF NOT EXISTS idx_working_memory_repo_key ON working_memory(repo, key);
+CREATE INDEX IF NOT EXISTS idx_working_memory_expires ON working_memory(expires_at);
+CREATE INDEX IF NOT EXISTS idx_pr_outcomes_repo ON pr_outcomes(repo);
+CREATE INDEX IF NOT EXISTS idx_findings_cache_repo ON findings_cache(repo);
 "#;
 
 /// Persistent memory backed by SQLite.

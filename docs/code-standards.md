@@ -1,6 +1,6 @@
 # Code Standards & Development Guidelines
 
-**Version:** 5.4.2 | **Language:** Rust 2021 | **Status:** Active
+**Version:** 5.5.0 | **Language:** Rust 2021 | **Status:** Active
 
 ---
 
@@ -576,4 +576,4 @@ let token = std::env::var("CONTRIBAI_GITHUB_TOKEN")
 
 - **Created:** 2026-03-28
 - **Last Updated:** 2026-04-04
-- **Version:** 5.4.2 (355 tests, 65 files, watchlist + dream memory + risk classification)
+- **Version:** 5.5.0 (355 tests, 65 files, watchlist + dream memory + risk classification)

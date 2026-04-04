@@ -1,6 +1,6 @@
 # System Architecture
 
-**Version:** 5.4.2 | **Language:** Rust | **Last Updated:** 2026-04-04
+**Version:** 5.5.0 | **Language:** Rust | **Last Updated:** 2026-04-04
 
 ---
 
@@ -8,7 +8,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ContribAI Pipeline (v5.4.2 Rust)             │
+│                    ContribAI Pipeline (v5.5.0 Rust)             │
 └─────────────────────────────────────────────────────────────────┘
 
 Input: GitHub Repository (URL or discovery)
@@ -493,4 +493,4 @@ pub enum ContribAIError {
 
 - **Created:** 2026-03-28
 - **Last Updated:** 2026-04-04
-- **Version:** 5.4.2 (Watchlist, Dream Memory, Risk Classification, Conversation-Aware Patrol)
+- **Version:** 5.5.0 (Multi-file PRs, Issue Solver, Conversation Memory, Dream Profile Wiring)

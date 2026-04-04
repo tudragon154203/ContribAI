@@ -1,6 +1,6 @@
 # ContribAI Codebase Summary
 
-**Version:** 5.4.2 | **Language:** Rust | **Total LOC:** ~26,000+ | **Files:** 65 .rs | **Tests:** 355
+**Version:** 5.5.0 | **Language:** Rust | **Total LOC:** ~28,000 | **Files:** 66 .rs | **Tests:** 355
 
 ---
 
@@ -323,4 +323,4 @@ mod tests {
 
 - **Created:** 2026-03-28
 - **Last Updated:** 2026-04-04
-- **Version:** 5.4.2 (65 files, 355 tests, watchlist, dream memory, risk classification)
+- **Version:** 5.5.0 (66 files, 355 tests, multi-file PRs, issue solver, conversation memory)

@@ -1108,6 +1108,37 @@ impl<'a> ContribPipeline<'a> {
                         continue;
                     }
 
+                    // v5.6: Docs-type suppression — skip docs PRs unless repo accepts them
+                    if self.config.pipeline.skip_docs_prs
+                        && contribution.contribution_type == ContributionType::DocsImprove
+                    {
+                        let accepts_docs = self
+                            .memory
+                            .get_repo_preferences(&repo.full_name)
+                            .ok()
+                            .flatten()
+                            .map(|p| p.preferred_types.iter().any(|t| t.contains("docs")))
+                            .unwrap_or(false);
+                        if !accepts_docs {
+                            info!(
+                                title = %contribution.title,
+                                "📄 Skipping docs-only PR (low merge rate for docs type)"
+                            );
+                            continue;
+                        }
+                    }
+
+                    // v5.6: Bug verification — ask LLM if finding is actually real
+                    if self.config.pipeline.require_bug_verification
+                        && !generator.verify_finding(&contribution, &repo_context).await
+                    {
+                        info!(
+                            title = %contribution.title,
+                            "🔍 Bug verification failed — likely false positive"
+                        );
+                        continue;
+                    }
+
                     info!(
                         title = %contribution.title,
                         risk = %risk.level,
@@ -1130,6 +1161,22 @@ impl<'a> ContribPipeline<'a> {
 
         if valid_contributions.is_empty() {
             return Ok(result);
+        }
+
+        // v5.6: Cross-run dedup — skip if we already have an open PR to this repo
+        if self.config.pipeline.skip_repos_with_open_pr {
+            if let Ok(existing) = self.memory.get_prs(Some("open"), 100) {
+                let has_open = existing
+                    .iter()
+                    .any(|pr| pr.get("repo").map(|r| r.as_str()) == Some(repo.full_name.as_str()));
+                if has_open {
+                    info!(
+                        repo = %repo.full_name,
+                        "🔁 Skipping — already have open PR to this repo"
+                    );
+                    return Ok(result);
+                }
+            }
         }
 
         // Merge multiple contributions into a single multi-file PR
