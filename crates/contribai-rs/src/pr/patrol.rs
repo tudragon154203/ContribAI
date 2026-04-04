@@ -61,21 +61,9 @@ impl<'a> PrPatrol<'a> {
     }
 
     /// Record a feedback message in conversation memory (if memory is attached).
-    fn save_conversation(
-        &self,
-        repo: &str,
-        pr_number: i64,
-        role: &str,
-        author: &str,
-        body: &str,
-        comment_id: i64,
-        is_inline: bool,
-        file_path: Option<&str>,
-    ) {
+    fn save_conversation(&self, msg: crate::orchestrator::memory::ConversationMessage) {
         if let Some(mem) = self.memory {
-            if let Err(e) = mem.record_conversation(
-                repo, pr_number, role, author, body, comment_id, is_inline, file_path,
-            ) {
+            if let Err(e) = mem.record_conversation(&msg) {
                 tracing::debug!("Failed to save conversation: {}", e);
             }
         }
@@ -290,17 +278,16 @@ impl<'a> PrPatrol<'a> {
                 });
 
                 // v5.4: Save to conversation memory
-                let full_repo = format!("{}/{}", owner, repo);
-                self.save_conversation(
-                    &full_repo,
+                self.save_conversation(crate::orchestrator::memory::ConversationMessage {
+                    repo: format!("{}/{}", owner, repo),
                     pr_number,
-                    "maintainer",
-                    login,
-                    body,
+                    role: "maintainer".into(),
+                    author: login.to_string(),
+                    body: body.to_string(),
                     comment_id,
-                    false,
-                    None,
-                );
+                    is_inline: false,
+                    file_path: None,
+                });
             }
         }
 
@@ -342,17 +329,16 @@ impl<'a> PrPatrol<'a> {
                 });
 
                 // v5.4: Save to conversation memory
-                let full_repo = format!("{}/{}", owner, repo);
-                self.save_conversation(
-                    &full_repo,
+                self.save_conversation(crate::orchestrator::memory::ConversationMessage {
+                    repo: format!("{}/{}", owner, repo),
                     pr_number,
-                    "maintainer",
-                    login,
-                    body,
+                    role: "maintainer".into(),
+                    author: login.to_string(),
+                    body: body.to_string(),
                     comment_id,
-                    true,
-                    file_path_str,
-                );
+                    is_inline: true,
+                    file_path: file_path_str.map(String::from),
+                });
             }
         }
 

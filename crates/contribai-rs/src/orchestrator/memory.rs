@@ -14,6 +14,19 @@ use tracing::info;
 
 use crate::core::error::{ContribError, Result};
 
+/// A single message in a PR conversation thread.
+pub struct ConversationMessage {
+    pub repo: String,
+    pub pr_number: i64,
+    /// "maintainer", "contribai", or "bot"
+    pub role: String,
+    pub author: String,
+    pub body: String,
+    pub comment_id: i64,
+    pub is_inline: bool,
+    pub file_path: Option<String>,
+}
+
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS analyzed_repos (
     full_name   TEXT PRIMARY KEY,
@@ -947,19 +960,16 @@ impl Memory {
 
     /// Record a single message in a PR conversation thread.
     ///
-    /// `role` is "maintainer", "contribai", or "bot".
     /// Duplicate comment_ids are silently ignored (UNIQUE constraint).
-    pub fn record_conversation(
-        &self,
-        repo: &str,
-        pr_number: i64,
-        role: &str,
-        author: &str,
-        body: &str,
-        comment_id: i64,
-        is_inline: bool,
-        file_path: Option<&str>,
-    ) -> Result<()> {
+    pub fn record_conversation(&self, msg: &ConversationMessage) -> Result<()> {
+        let repo = &msg.repo;
+        let pr_number = msg.pr_number;
+        let role = &msg.role;
+        let author = &msg.author;
+        let body = &msg.body;
+        let comment_id = msg.comment_id;
+        let is_inline = msg.is_inline;
+        let file_path = msg.file_path.as_deref();
         let db = self.lock_db()?;
         let now = Utc::now().to_rfc3339();
         db.execute(

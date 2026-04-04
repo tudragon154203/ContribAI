@@ -1213,12 +1213,14 @@ impl<'a> ContribPipeline<'a> {
     ) -> Result<PipelineResult> {
         use crate::issues::solver::IssueSolver;
 
-        let mut result = PipelineResult::default();
-        result.repos_analyzed = 1;
-
         let solver = IssueSolver::new(self.llm, self.github);
         let issues = solver.fetch_solvable_issues(repo, max_prs, 5).await;
-        result.findings_total = issues.len();
+
+        let mut result = PipelineResult {
+            repos_analyzed: 1,
+            findings_total: issues.len(),
+            ..PipelineResult::default()
+        };
 
         if issues.is_empty() {
             return Ok(result);

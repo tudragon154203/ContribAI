@@ -261,9 +261,7 @@ mod tests {
         let lb = Leaderboard::new(&db);
         let merges = lb.get_recent_merges(5);
         assert_eq!(merges.len(), 2);
-        assert!(merges
-            .iter()
-            .all(|m| m.pr_url.is_empty() || m.pr_url.len() >= 0));
+        assert!(merges.iter().all(|m| m.pr_number > 0));
     }
 
     #[test]
