@@ -23,6 +23,8 @@ pub struct GitHubClient {
     client: Client,
     #[allow(dead_code)]
     token: String,
+    /// Base URL for API requests (default: https://api.github.com).
+    base_url: String,
     rate_limit_buffer: u32,
     /// Tracked remaining rate limit from response headers.
     rate_remaining: AtomicU32,
@@ -66,10 +68,17 @@ impl GitHubClient {
         Ok(Self {
             client,
             token: token.to_string(),
+            base_url: GITHUB_API.to_string(),
             rate_limit_buffer,
             rate_remaining: AtomicU32::new(5000),
             rate_reset_at: AtomicU32::new(0),
         })
+    }
+
+    /// Override the base URL (for testing with mock servers).
+    pub fn with_base_url(mut self, url: &str) -> Self {
+        self.base_url = url.trim_end_matches('/').to_string();
+        self
     }
 
     /// Get current rate limit status.
@@ -139,7 +148,7 @@ impl GitHubClient {
         let full_url = if url.starts_with("http") {
             url.to_string()
         } else {
-            format!("{}{}", GITHUB_API, url)
+            format!("{}{}", self.base_url, url)
         };
 
         let max_retries: u32 = 3;
@@ -246,7 +255,7 @@ impl GitHubClient {
         let full_url = if url.starts_with("http") {
             url.to_string()
         } else {
-            format!("{}{}", GITHUB_API, url)
+            format!("{}{}", self.base_url, url)
         };
 
         let mut req = self.client.request(method, &full_url);

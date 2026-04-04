@@ -1,6 +1,6 @@
 # ContribAI — Project Overview & PDR
 
-**Version:** 5.5.0 | **License:** AGPL-3.0 + Commons Clause | **Status:** Active Development
+**Version:** 5.8.0 | **License:** AGPL-3.0 + Commons Clause | **Status:** Active Development
 
 ---
 
@@ -8,7 +8,7 @@
 
 **ContribAI** is an autonomous AI agent written in Rust that discovers open source repositories on GitHub, analyzes them for improvement opportunities, generates high-quality code fixes, and submits Pull Requests — all without human intervention. It bridges the gap between maintainer bandwidth constraints and contributor availability by delivering production-grade contributions at scale.
 
-**v5.5.0** is the full Rust rewrite: ~4.5 MB single binary, ~5ms startup, 40+ CLI commands, interactive TUI, real notification delivery, watchlist mode, dream memory consolidation, and risk classification system.
+**v5.8.0** is the full Rust rewrite: ~4.5 MB single binary, ~5ms startup, 40+ CLI commands, interactive TUI, real notification delivery, watchlist mode, dream memory, risk classification, cross-file import resolution, and 413 tests with integration test coverage.
 
 ---
 

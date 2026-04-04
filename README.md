@@ -5,9 +5,9 @@
 **Autonomous AI agent that discovers, analyzes, and submits<br>Pull Requests to open source projects on GitHub.**
 
 [![Rust](https://img.shields.io/badge/Rust-1.75+-f74c00?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/v5.6.0-blue?style=for-the-badge&logo=github&logoColor=white)](https://github.com/tang-vu/ContribAI/releases)
+[![Version](https://img.shields.io/badge/v5.8.0-blue?style=for-the-badge&logo=github&logoColor=white)](https://github.com/tang-vu/ContribAI/releases)
 [![License](https://img.shields.io/badge/AGPL--3.0-green?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
-[![Tests](https://img.shields.io/badge/388_tests-passing-brightgreen?style=for-the-badge&logo=checkmarx&logoColor=white)](#testing)
+[![Tests](https://img.shields.io/badge/413_tests-passing-brightgreen?style=for-the-badge&logo=checkmarx&logoColor=white)](#testing)
 [![PRs Merged](https://img.shields.io/badge/10_PRs-merged-blueviolet?style=for-the-badge&logo=git&logoColor=white)](HALL_OF_FAME.md)
 
 <br>

@@ -1,12 +1,12 @@
 # Project Roadmap
 
-**Current Version:** 5.5.0 | **Release Date:** 2026-04-04 | **Status:** Active Development
+**Current Version:** 5.8.0 | **Release Date:** 2026-04-05 | **Status:** Active Development
 
 ---
 
 ## Executive Summary
 
-ContribAI is a mature autonomous AI contribution system. Originally built in Python (v0.x–v4.0), it was rewritten in Rust (v5.0.0) for performance, safety, and new capabilities like tree-sitter AST parsing and PageRank file ranking. v5.2.0 added an interactive TUI and full CLI parity. v5.3.0 introduced watchlist mode and 13-language AST. v5.4.0 added dream memory consolidation and risk classification. v5.5.0 delivers multi-file PRs, end-to-end issue solving, and conversation memory. The roadmap focuses on integration testing, merge rate optimization, and advanced analysis.
+ContribAI is a mature autonomous AI contribution system. Originally built in Python (v0.x–v4.0), it was rewritten in Rust (v5.0.0) for performance, safety, and new capabilities like tree-sitter AST parsing and PageRank file ranking. v5.2.0 added an interactive TUI and full CLI parity. v5.3.0 introduced watchlist mode and 13-language AST. v5.4.0 added dream memory consolidation and risk classification. v5.5.0 delivers multi-file PRs, end-to-end issue solving, and conversation memory. v5.6.0 adds integration tests, LLM retry with backoff, GitHub rate limiter, and the doctor command. v5.7.0–v5.8.0 deliver cross-file import resolution, hunt CLI fix, and full integration test coverage for hunt/patrol. The roadmap focuses on enterprise scalability and plugin ecosystem.
 
 ---
 
@@ -143,9 +143,37 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 - ✓ Auto-dream trigger on `run_targeted()` path
 - ✓ 66 .rs files, ~28,000 LOC, **355 tests**
 
+### v5.6.0 (2026-04-04) — Integration Tests, Merge Rate, LLM Retry ✓
+
+**Key Achievements (v5.6.0):**
+- ✓ Integration test framework: wiremock 0.6 + MockLlm test infrastructure
+- ✓ 33+ new tests (388 total): pipeline, patrol, hunt pre-processing paths
+- ✓ LLM retry with exponential backoff: configurable retries for transient failures
+- ✓ GitHub rate limiter: token-bucket rate limiting for API calls
+- ✓ `doctor` command: system health diagnostics (config, LLM, GitHub, DB)
+- ✓ DB indexes for hot query paths (analyzed_repos, submitted_prs, pr_outcomes)
+- ✓ Semantic code chunking: intelligent truncation respecting AST boundaries
+
+### v5.7.0 (2026-04-05) — Hunt CLI Fix, TTL, Semantic Chunking ✓
+
+**Key Achievements (v5.7.0):**
+- ✓ Hunt CLI fix: `hunt` command now calls `pipeline.hunt()` instead of `pipeline.run()`
+- ✓ cargo fmt --all: full codebase formatting pass
+
+### v5.8.0 (2026-04-05) — Cross-File Import Resolution, Integration Tests ✓
+
+**Key Achievements (v5.8.0):**
+- ✓ Cross-file import resolution: 1-hop resolution for 5 languages (Rust/Python/JS-TS/Go/Java), capped at 20 symbols
+- ✓ `symbol_map` wired in pipeline: type context feature now has real data from `extract_symbols()`
+- ✓ GitHubClient `with_base_url()`: wiremock-friendly testability without prod code changes
+- ✓ Mock GitHub infrastructure: `mock_github.rs` with fixture factories + wiremock helpers
+- ✓ Patrol integration tests (5 tests): bot filtering, classification, conversation context, 404 auto-clean, dry-run
+- ✓ Hunt integration tests (4 tests): daily limit gate, merge-friendly filter, TTL skip, empty discovery
+- ✓ 67 .rs files, ~29,200 LOC, **413 tests**
+
 ---
 
-## Feature Status Matrix (v5.5.0)
+## Feature Status Matrix (v5.8.0)
 
 ### Core Pipeline
 
@@ -244,25 +272,35 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 - ✓ PR conversation memory for context-aware responses
 - ✓ 40+ CLI commands, 355 tests, 66 .rs files, ~28,000 LOC
 
+### Milestone 7: Test Coverage & Analysis (v5.6.0–v5.8.0) ✓
+- ✓ Integration test framework (wiremock 0.6 + MockLlm)
+- ✓ Hunt & patrol integration tests (9 tests covering critical paths)
+- ✓ Cross-file import resolution (5 languages, 1-hop, 20-symbol cap)
+- ✓ symbol_map wired for type-aware code generation
+- ✓ LLM retry with exponential backoff
+- ✓ GitHub rate limiter + doctor command
+- ✓ DB indexes for hot query paths
+- ✓ 67 .rs files, ~29,200 LOC, 413 tests
+
 ---
 
-## Planned Features (v5.6.0+)
+## Planned Features (v5.9.0+)
 
-### v5.6.0 — Integration Tests & Merge Rate (Q2 2026)
+### v5.6.0 — Integration Tests & Merge Rate ✓ (Released 2026-04-04)
 
-- [ ] Integration test framework (wiremock + MockLlm)
-- [ ] 20+ integration tests for critical pipeline paths
+- [x] Integration test framework (wiremock + MockLlm)
+- [x] 20+ integration tests for critical pipeline paths
 - [ ] Closed-PR failure analysis + merge rate improvements
-- [ ] DB indexes for hot query paths
+- [x] DB indexes for hot query paths
 - [ ] Enhanced quality scoring based on outcome learning
 
-### v5.7.0 — Advanced Analysis (Q3 2026)
+### v5.7.0–v5.8.0 — Advanced Analysis ✓ (Released 2026-04-05)
 
-- [ ] Semantic code chunking (not truncation)
-- [ ] Enhanced tree-sitter analysis (cross-file reference resolution)
-- [ ] Type-aware code generation hints
+- [x] Semantic code chunking (not truncation)
+- [x] Enhanced tree-sitter analysis (cross-file reference resolution)
+- [x] Type-aware code generation hints (symbol_map wired in pipeline)
 
-### v5.8.0 — Enterprise Scalability (Q3 2026)
+### v5.9.0 — Enterprise Scalability (Q3 2026)
 
 - [ ] PostgreSQL migration layer (drop-in SQLite replacement)
 - [ ] Redis-based distributed rate limiting
@@ -270,7 +308,7 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 - [ ] OpenTelemetry distributed tracing
 - [ ] Kubernetes Helm charts
 
-### v5.9.0 — Plugin Ecosystem (Q4 2026)
+### v5.10.0 — Plugin Ecosystem (Q4 2026)
 
 - [ ] Central plugin registry (GitHub-based)
 - [ ] Plugin package format (dynamic Rust libraries / WASM)
@@ -302,8 +340,8 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 | Item | Effort | Priority | Status |
 |------|--------|----------|--------|
 | Add database indexes for performance | Small | High | ✓ Done (v5.6.0) |
-| Implement integration test suite | Medium | High | Planned (v5.6.0) |
-| Add structured OpenTelemetry spans | Medium | Medium | Planned (v5.8.0) |
+| Implement integration test suite | Medium | High | ✓ Done (v5.6.0–v5.8.0) |
+| Add structured OpenTelemetry spans | Medium | Medium | Planned (v5.9.0) |
 
 ---
 
@@ -323,24 +361,24 @@ ContribAI is a mature autonomous AI contribution system. Originally built in Pyt
 
 ## Success Metrics
 
-| Metric | v4.0 (Python) | v5.0 (Rust) | v5.5.0 (Current) |
-|--------|---------------|-------------|------------------|
-| **LOC** | ~5,500 | ~21,400 | ~28,000 |
-| **Files** | 45 | 63 | **66** |
-| **Test count** | ~298 | 323 | **355** |
-| **Binary size** | N/A (interpreted) | ~15MB static | ~4.5MB stripped |
-| **Startup time** | ~2s | <100ms | ~5ms |
-| **Memory usage** | ~80MB | ~20MB | ~8MB |
-| **MCP tools** | 14 | 21 | 21 |
-| **CLI commands** | 8 | 21 | **40+** |
-| **Analysis skills** | 12 | 17 | 17 |
-| **AST languages** | 0 | 8 | **13** |
+| Metric | v4.0 (Python) | v5.0 (Rust) | v5.5.0 | v5.8.0 (Current) |
+|--------|---------------|-------------|--------|------------------|
+| **LOC** | ~5,500 | ~21,400 | ~28,000 | **~29,200** |
+| **Files** | 45 | 63 | 66 | **67** |
+| **Test count** | ~298 | 323 | 355 | **413** |
+| **Binary size** | N/A (interpreted) | ~15MB static | ~4.5MB stripped | ~4.5MB stripped |
+| **Startup time** | ~2s | <100ms | ~5ms | ~5ms |
+| **Memory usage** | ~80MB | ~20MB | ~8MB | ~8MB |
+| **MCP tools** | 14 | 21 | 21 | 21 |
+| **CLI commands** | 8 | 21 | 40+ | **40+** |
+| **Analysis skills** | 12 | 17 | 17 | 17 |
+| **AST languages** | 0 | 8 | 13 | **13** |
 
 ---
 
 ## Document Metadata
 
 - **Created:** 2026-03-28
-- **Last Updated:** 2026-04-04
-- **Version:** 5.5.0 (Multi-file PRs, Issue Solver, Conversation Memory, Dream Profile Wiring)
+- **Last Updated:** 2026-04-05
+- **Version:** 5.8.0 (Cross-file import resolution, integration tests, hunt/patrol coverage)
 - **Next Review:** 2026-06-30 (Q2 end)

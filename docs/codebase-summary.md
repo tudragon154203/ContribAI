@@ -1,6 +1,6 @@
 # ContribAI Codebase Summary
 
-**Version:** 5.5.0 | **Language:** Rust | **Total LOC:** ~28,000 | **Files:** 66 .rs | **Tests:** 355
+**Version:** 5.8.0 | **Language:** Rust | **Total LOC:** ~29,200 | **Files:** 67 .rs | **Tests:** 413
 
 ---
 
@@ -205,7 +205,7 @@ SchedulerStarted | WebhookReceived
 | **Logging** | tracing, tracing-subscriber |
 | **Code Parsing** | tree-sitter (13 language grammars) |
 | **Crypto** | hmac, sha2, hex (webhook verification) |
-| **Testing** | cargo test (built-in), 355 tests |
+| **Testing** | cargo test (built-in), 413 tests |
 | **Linting** | clippy |
 | **Formatting** | rustfmt |
 
@@ -305,7 +305,7 @@ mod tests {
 }
 ```
 
-**Test Coverage:** 355 tests across 65 source files
+**Test Coverage:** 413 tests across 67 source files (includes 9 integration tests for hunt/patrol)
 **Test Command:** `cargo test` (all tests), `cargo test <module>` (specific)
 
 ---
@@ -322,5 +322,5 @@ mod tests {
 ## Document Metadata
 
 - **Created:** 2026-03-28
-- **Last Updated:** 2026-04-04
-- **Version:** 5.5.0 (66 files, 355 tests, multi-file PRs, issue solver, conversation memory)
+- **Last Updated:** 2026-04-05
+- **Version:** 5.8.0 (67 files, 413 tests, cross-file import resolution, hunt/patrol integration tests)

@@ -1,6 +1,6 @@
 # System Architecture
 
-**Version:** 5.5.0 | **Language:** Rust | **Last Updated:** 2026-04-04
+**Version:** 5.8.0 | **Language:** Rust | **Last Updated:** 2026-04-05
 
 ---
 
@@ -8,7 +8,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ContribAI Pipeline (v5.5.0 Rust)             │
+│                    ContribAI Pipeline (v5.8.0 Rust)             │
 └─────────────────────────────────────────────────────────────────┘
 
 Input: GitHub Repository (URL or discovery)

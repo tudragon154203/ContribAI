@@ -561,12 +561,7 @@ impl<'a> ContribPipeline<'a> {
                 {
                     let merged = prs
                         .iter()
-                        .filter(|p| {
-                            p.get("merged_at")
-                                .and_then(|v| v.as_str())
-                                .map(|s| !s.is_empty())
-                                .unwrap_or(false)
-                        })
+                        .filter(|p| p.get("merged_at").and_then(|v| v.as_str()).is_some())
                         .count();
                     if merged > 0 {
                         info!(repo = %repo.full_name, merged, "✅ Merge-friendly target");
@@ -1024,6 +1019,47 @@ impl<'a> ContribPipeline<'a> {
             .ok()
             .flatten();
 
+        // v5.7.1: Build symbol map from relevant files (for type-aware generation)
+        let mut symbol_map: HashMap<String, Vec<crate::core::models::Symbol>> = HashMap::new();
+        for (file_path, content) in &relevant_files {
+            if let Ok(symbols) =
+                crate::analysis::ast_intel::AstIntel::extract_symbols(content, file_path)
+            {
+                if !symbols.is_empty() {
+                    symbol_map.insert(file_path.clone(), symbols);
+                }
+            }
+        }
+
+        // v5.7.1: Cross-file import resolution — enrich symbol_map with resolved imports
+        for (file_path, content) in &relevant_files {
+            let import_targets =
+                crate::analysis::ast_intel::AstIntel::extract_import_targets(content, file_path);
+            if !import_targets.is_empty() {
+                let resolved = crate::analysis::ast_intel::AstIntel::resolve_imports(
+                    &import_targets,
+                    &symbol_map,
+                );
+                if !resolved.is_empty() {
+                    // Add resolved cross-file symbols as virtual entries
+                    let cross_symbols: Vec<crate::core::models::Symbol> = resolved
+                        .iter()
+                        .map(|(name, sig)| crate::core::models::Symbol {
+                            name: format!("{} [resolved: {}]", name, sig),
+                            kind: crate::core::models::SymbolKind::Import,
+                            file_path: file_path.clone(),
+                            line_start: 0,
+                            line_end: 0,
+                        })
+                        .collect();
+                    symbol_map
+                        .entry(format!("_cross_file_{}", file_path))
+                        .or_default()
+                        .extend(cross_symbols);
+                }
+            }
+        }
+
         let repo_context = crate::core::models::RepoContext {
             repo: repo.clone(),
             file_tree,
@@ -1039,7 +1075,7 @@ impl<'a> ContribPipeline<'a> {
             relevant_files,
             open_issues: Vec::new(),
             coding_style,
-            symbol_map: HashMap::new(),
+            symbol_map,
             file_ranks: HashMap::new(),
         };
 

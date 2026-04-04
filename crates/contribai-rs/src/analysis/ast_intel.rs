@@ -6,10 +6,20 @@
 //! Supports: Python, JavaScript, TypeScript, Go, Rust, Java, C, C++,
 //!           Ruby, PHP, C#, HTML, CSS (13 languages).
 
+use std::collections::HashMap;
 use tracing::debug;
 
 use crate::core::error::{ContribError, Result};
 use crate::core::models::{Symbol, SymbolKind};
+
+/// An imported symbol and the module it comes from.
+#[derive(Debug, Clone)]
+pub struct ImportTarget {
+    /// The symbol name being imported (e.g., "HashMap", "Path", "useState").
+    pub symbol_name: String,
+    /// The source module path (e.g., "std::collections", "pathlib", "./utils").
+    pub source_path: String,
+}
 
 /// Supported languages for AST parsing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -315,6 +325,334 @@ impl AstIntel {
             .collect()
     }
 
+    /// Extract import targets with their source module paths.
+    ///
+    /// Parses import statements and returns (symbol_name, source_module) pairs.
+    /// Supports: Rust, Python, JS/TS, Go, Java (5 languages).
+    pub fn extract_import_targets(source: &str, file_path: &str) -> Vec<ImportTarget> {
+        let ext = file_path.rsplit('.').next().unwrap_or("");
+        let lang = match Language::from_extension(ext) {
+            Some(l) => l,
+            None => return vec![],
+        };
+
+        let mut parser = tree_sitter::Parser::new();
+        let ts_lang = match Self::get_ts_language(lang) {
+            Ok(l) => l,
+            Err(_) => return vec![],
+        };
+        if parser.set_language(&ts_lang).is_err() {
+            return vec![];
+        }
+
+        let tree = match parser.parse(source, None) {
+            Some(t) => t,
+            None => return vec![],
+        };
+
+        let root = tree.root_node();
+        let mut targets = Vec::new();
+        Self::walk_import_nodes(root, source, lang, &mut targets);
+        targets
+    }
+
+    /// Walk AST nodes to extract import targets with source paths.
+    fn walk_import_nodes(
+        node: tree_sitter::Node,
+        source: &str,
+        lang: Language,
+        targets: &mut Vec<ImportTarget>,
+    ) {
+        let kind = node.kind();
+        let text = &source[node.byte_range()];
+
+        match lang {
+            Language::Python => {
+                // `from pathlib import Path` → symbol="Path", source="pathlib"
+                // `import os` → symbol="os", source="os"
+                if kind == "import_from_statement" {
+                    let module = Self::child_text(node, "module_name", source)
+                        .or_else(|| Self::child_text(node, "dotted_name", source));
+                    if let Some(module_path) = module {
+                        // Find imported names
+                        let mut cursor = node.walk();
+                        for child in node.children(&mut cursor) {
+                            if child.kind() == "dotted_name"
+                                && child.start_byte()
+                                    > node
+                                        .child_by_field_name("module_name")
+                                        .map(|n| n.end_byte())
+                                        .unwrap_or(0)
+                            {
+                                targets.push(ImportTarget {
+                                    symbol_name: source[child.byte_range()].to_string(),
+                                    source_path: module_path.clone(),
+                                });
+                            }
+                            if child.kind() == "aliased_import" || child.kind() == "import" {
+                                if let Some(name) = Self::child_text(child, "name", source) {
+                                    targets.push(ImportTarget {
+                                        symbol_name: name,
+                                        source_path: module_path.clone(),
+                                    });
+                                }
+                            }
+                        }
+                        // Fallback: parse from text if no targets were added for this node
+                        let added_for_node = targets
+                            .iter()
+                            .rev()
+                            .take_while(|t| t.source_path == module_path)
+                            .count();
+                        if added_for_node == 0 {
+                            if let Some(after_import) = text.split("import").nth(1) {
+                                for name in after_import.split(',') {
+                                    let name = name.split(" as ").next().unwrap_or("").trim();
+                                    if !name.is_empty() && name != "(" && name != ")" {
+                                        targets.push(ImportTarget {
+                                            symbol_name: name.to_string(),
+                                            source_path: module_path.clone(),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if kind == "import_statement" {
+                    // `import os` → symbol="os", source="os"
+                    if let Some(name) = Self::child_text(node, "name", source)
+                        .or_else(|| Self::child_text(node, "dotted_name", source))
+                    {
+                        targets.push(ImportTarget {
+                            symbol_name: name.clone(),
+                            source_path: name,
+                        });
+                    }
+                }
+            }
+            Language::JavaScript | Language::TypeScript => {
+                // `import { Foo, Bar } from './module'` → symbols with source
+                if kind == "import_statement" {
+                    let source_path = Self::child_text(node, "source", source)
+                        .map(|s| s.trim_matches('\'').trim_matches('"').to_string())
+                        .unwrap_or_default();
+                    if source_path.is_empty() {
+                        // Fallback: extract from text
+                        if let Some(from_part) = text.split("from").last() {
+                            let sp = from_part
+                                .trim()
+                                .trim_matches(|c| c == '\'' || c == '"' || c == ';')
+                                .to_string();
+                            if !sp.is_empty() {
+                                Self::extract_js_import_names(text, &sp, targets);
+                            }
+                        }
+                    } else {
+                        Self::extract_js_import_names(text, &source_path, targets);
+                    }
+                }
+            }
+            Language::Rust => {
+                // `use std::collections::HashMap;` → symbol="HashMap", source="std::collections"
+                if kind == "use_declaration" {
+                    let path_text = text.trim_start_matches("use ").trim_end_matches(';').trim();
+                    Self::parse_rust_use(path_text, targets);
+                }
+            }
+            Language::Go => {
+                // `import "fmt"` or `import ( "fmt" "os" )`
+                if kind == "import_declaration" {
+                    let mut cursor = node.walk();
+                    for child in node.children(&mut cursor) {
+                        if child.kind() == "import_spec"
+                            || child.kind() == "interpreted_string_literal"
+                        {
+                            let import_path =
+                                source[child.byte_range()].trim_matches('"').to_string();
+                            let symbol = import_path
+                                .rsplit('/')
+                                .next()
+                                .unwrap_or(&import_path)
+                                .to_string();
+                            targets.push(ImportTarget {
+                                symbol_name: symbol,
+                                source_path: import_path,
+                            });
+                        }
+                        // Nested import specs in import block
+                        if child.kind() == "import_spec_list" {
+                            let mut inner_cursor = child.walk();
+                            for spec in child.children(&mut inner_cursor) {
+                                if spec.kind() == "import_spec" {
+                                    let spec_text = source[spec.byte_range()].trim();
+                                    let import_path = spec_text.trim_matches('"').to_string();
+                                    let symbol = import_path
+                                        .rsplit('/')
+                                        .next()
+                                        .unwrap_or(&import_path)
+                                        .to_string();
+                                    targets.push(ImportTarget {
+                                        symbol_name: symbol,
+                                        source_path: import_path,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Language::Java => {
+                // `import com.example.Foo;` → symbol="Foo", source="com.example"
+                if kind == "import_declaration" {
+                    let path_text = text
+                        .trim_start_matches("import ")
+                        .trim_start_matches("static ")
+                        .trim_end_matches(';')
+                        .trim();
+                    if let Some(dot_pos) = path_text.rfind('.') {
+                        targets.push(ImportTarget {
+                            symbol_name: path_text[dot_pos + 1..].to_string(),
+                            source_path: path_text[..dot_pos].to_string(),
+                        });
+                    }
+                }
+            }
+            _ => {} // Other languages: no import resolution
+        }
+
+        // Recurse into children
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            Self::walk_import_nodes(child, source, lang, targets);
+        }
+    }
+
+    /// Helper: get text of a named child node.
+    fn child_text(node: tree_sitter::Node, field_name: &str, source: &str) -> Option<String> {
+        node.child_by_field_name(field_name)
+            .map(|child| source[child.byte_range()].to_string())
+    }
+
+    /// Helper: extract named imports from JS/TS import text.
+    fn extract_js_import_names(text: &str, source_path: &str, targets: &mut Vec<ImportTarget>) {
+        // Handle `import { Foo, Bar } from '...'`
+        if let Some(start) = text.find('{') {
+            if let Some(end) = text.find('}') {
+                let names_str = &text[start + 1..end];
+                for name in names_str.split(',') {
+                    let name = name.split(" as ").next().unwrap_or("").trim();
+                    if !name.is_empty() {
+                        targets.push(ImportTarget {
+                            symbol_name: name.to_string(),
+                            source_path: source_path.to_string(),
+                        });
+                    }
+                }
+                return;
+            }
+        }
+        // Handle `import Foo from '...'` (default import)
+        if let Some(after_import) = text.strip_prefix("import ") {
+            let name = after_import.split_whitespace().next().unwrap_or("").trim();
+            if !name.is_empty() && name != "{" && name != "*" && name != "type" {
+                targets.push(ImportTarget {
+                    symbol_name: name.to_string(),
+                    source_path: source_path.to_string(),
+                });
+            }
+        }
+    }
+
+    /// Helper: parse Rust `use` path into ImportTargets.
+    fn parse_rust_use(path: &str, targets: &mut Vec<ImportTarget>) {
+        // Handle `use crate::module::{Foo, Bar};`
+        if let Some(brace_start) = path.find('{') {
+            let prefix = path[..brace_start].trim_end_matches("::");
+            if let Some(brace_end) = path.find('}') {
+                for name in path[brace_start + 1..brace_end].split(',') {
+                    let name = name.split(" as ").next().unwrap_or("").trim();
+                    if !name.is_empty() {
+                        targets.push(ImportTarget {
+                            symbol_name: name.to_string(),
+                            source_path: prefix.to_string(),
+                        });
+                    }
+                }
+            }
+        } else if let Some(last_sep) = path.rfind("::") {
+            // `use std::collections::HashMap` → symbol="HashMap", source="std::collections"
+            targets.push(ImportTarget {
+                symbol_name: path[last_sep + 2..].to_string(),
+                source_path: path[..last_sep].to_string(),
+            });
+        } else {
+            // `use foo;`
+            targets.push(ImportTarget {
+                symbol_name: path.to_string(),
+                source_path: path.to_string(),
+            });
+        }
+    }
+
+    /// Resolve imported symbols against a map of already-parsed files.
+    ///
+    /// Returns symbol_name → type_signature (one-line summary) for symbols
+    /// found in the parsed_files map. 1-hop resolution only, capped at 20.
+    pub fn resolve_imports(
+        imports: &[ImportTarget],
+        parsed_files: &HashMap<String, Vec<Symbol>>,
+    ) -> HashMap<String, String> {
+        let mut resolved = HashMap::new();
+
+        for target in imports.iter().take(20) {
+            // Search all parsed files for a symbol matching the import name
+            for (file_path, symbols) in parsed_files {
+                // Skip if this is a standard library import (not a local file)
+                if target.source_path.starts_with("std")
+                    || target.source_path.starts_with("core")
+                    || target.source_path.starts_with("alloc")
+                    || target.source_path.starts_with("os")
+                    || target.source_path.starts_with("sys")
+                    || target.source_path.starts_with("react")
+                    || target.source_path.starts_with("vue")
+                    || target.source_path.starts_with("@")
+                    || target.source_path.starts_with("node:")
+                    || target.source_path.contains("node_modules")
+                    || target.source_path.contains(".venv")
+                    || target.source_path.contains("vendor")
+                {
+                    continue;
+                }
+
+                for symbol in symbols {
+                    if symbol.name == target.symbol_name
+                        && matches!(
+                            symbol.kind,
+                            SymbolKind::Function
+                                | SymbolKind::Struct
+                                | SymbolKind::Class
+                                | SymbolKind::Interface
+                                | SymbolKind::Enum
+                        )
+                    {
+                        let sig = format!(
+                            "{:?} {} ({}:L{}-L{})",
+                            symbol.kind, symbol.name, file_path, symbol.line_start, symbol.line_end
+                        );
+                        resolved.insert(target.symbol_name.clone(), sig);
+                        break;
+                    }
+                }
+
+                if resolved.len() >= 20 {
+                    break;
+                }
+            }
+        }
+
+        resolved
+    }
+
     /// Get a summary of symbols as a compact string for LLM context.
     pub fn symbols_summary(symbols: &[Symbol]) -> String {
         if symbols.is_empty() {
@@ -520,6 +858,135 @@ namespace MyApp {
     fn test_unknown_extension() {
         let symbols = AstIntel::extract_symbols("hello", "test.unknown").unwrap();
         assert!(symbols.is_empty(), "Unknown extension should return empty");
+    }
+
+    // ── Import Target Extraction Tests ──────────────────────────────
+
+    #[test]
+    fn test_extract_python_import_targets() {
+        let source = "from pathlib import Path\nimport os\nfrom collections import OrderedDict, defaultdict\n";
+        let targets = AstIntel::extract_import_targets(source, "test.py");
+        let names: Vec<&str> = targets.iter().map(|t| t.symbol_name.as_str()).collect();
+        assert!(names.contains(&"Path"), "Should extract Path from pathlib");
+        assert!(names.contains(&"os"), "Should extract os");
+    }
+
+    #[test]
+    fn test_extract_rust_import_targets() {
+        let source = "use std::collections::HashMap;\nuse crate::core::{Config, Error};\n";
+        let targets = AstIntel::extract_import_targets(source, "test.rs");
+        let names: Vec<&str> = targets.iter().map(|t| t.symbol_name.as_str()).collect();
+        assert!(names.contains(&"HashMap"), "Should extract HashMap");
+        assert!(
+            names.contains(&"Config"),
+            "Should extract Config from group import"
+        );
+        assert!(
+            names.contains(&"Error"),
+            "Should extract Error from group import"
+        );
+    }
+
+    #[test]
+    fn test_extract_js_import_targets() {
+        let source = "import { useState, useEffect } from 'react';\nimport App from './App';\n";
+        let targets = AstIntel::extract_import_targets(source, "test.js");
+        let names: Vec<&str> = targets.iter().map(|t| t.symbol_name.as_str()).collect();
+        assert!(names.contains(&"useState"), "Should extract useState");
+        assert!(names.contains(&"useEffect"), "Should extract useEffect");
+    }
+
+    #[test]
+    fn test_extract_java_import_targets() {
+        let source = "import java.util.HashMap;\nimport com.example.MyService;\n";
+        let targets = AstIntel::extract_import_targets(source, "test.java");
+        let names: Vec<&str> = targets.iter().map(|t| t.symbol_name.as_str()).collect();
+        assert!(names.contains(&"HashMap"), "Should extract HashMap");
+        assert!(names.contains(&"MyService"), "Should extract MyService");
+    }
+
+    #[test]
+    fn test_extract_go_import_targets() {
+        let source = "package main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n)\n";
+        let targets = AstIntel::extract_import_targets(source, "test.go");
+        let names: Vec<&str> = targets.iter().map(|t| t.symbol_name.as_str()).collect();
+        assert!(names.contains(&"fmt"), "Should extract fmt");
+        assert!(names.contains(&"http"), "Should extract http from net/http");
+    }
+
+    // ── Import Resolution Tests ─────────────────────────────────────
+
+    #[test]
+    fn test_resolve_imports_finds_matching_symbol() {
+        let imports = vec![ImportTarget {
+            symbol_name: "Config".into(),
+            source_path: "crate::core".into(),
+        }];
+        let mut parsed_files = HashMap::new();
+        parsed_files.insert(
+            "src/core/config.rs".to_string(),
+            vec![Symbol {
+                name: "Config".into(),
+                kind: SymbolKind::Struct,
+                file_path: "src/core/config.rs".into(),
+                line_start: 10,
+                line_end: 25,
+            }],
+        );
+
+        let resolved = AstIntel::resolve_imports(&imports, &parsed_files);
+        assert!(resolved.contains_key("Config"), "Should resolve Config");
+        assert!(resolved["Config"].contains("Struct"), "Should be a struct");
+    }
+
+    #[test]
+    fn test_resolve_imports_skips_stdlib() {
+        let imports = vec![ImportTarget {
+            symbol_name: "HashMap".into(),
+            source_path: "std::collections".into(),
+        }];
+        let mut parsed_files = HashMap::new();
+        parsed_files.insert(
+            "fake_stdlib.rs".to_string(),
+            vec![Symbol {
+                name: "HashMap".into(),
+                kind: SymbolKind::Struct,
+                file_path: "fake_stdlib.rs".into(),
+                line_start: 1,
+                line_end: 50,
+            }],
+        );
+
+        let resolved = AstIntel::resolve_imports(&imports, &parsed_files);
+        assert!(resolved.is_empty(), "Should skip stdlib imports");
+    }
+
+    #[test]
+    fn test_resolve_imports_caps_at_20() {
+        let imports: Vec<ImportTarget> = (0..30)
+            .map(|i| ImportTarget {
+                symbol_name: format!("Symbol{}", i),
+                source_path: "local::module".into(),
+            })
+            .collect();
+        let mut parsed_files = HashMap::new();
+        let symbols: Vec<Symbol> = (0..30)
+            .map(|i| Symbol {
+                name: format!("Symbol{}", i),
+                kind: SymbolKind::Function,
+                file_path: "src/module.rs".into(),
+                line_start: i * 10 + 1,
+                line_end: i * 10 + 10,
+            })
+            .collect();
+        parsed_files.insert("src/module.rs".to_string(), symbols);
+
+        let resolved = AstIntel::resolve_imports(&imports, &parsed_files);
+        assert!(
+            resolved.len() <= 20,
+            "Should cap at 20, got {}",
+            resolved.len()
+        );
     }
 
     #[test]
