@@ -405,6 +405,9 @@ pub struct RepoContext {
     /// AST symbol map: file_path → symbols (from tree-sitter).
     #[serde(default)]
     pub symbol_map: HashMap<String, Vec<Symbol>>,
+    /// Resolved cross-file import symbols, separate from symbol_map to avoid LLM prompt noise.
+    #[serde(default)]
+    pub resolved_imports: HashMap<String, Vec<Symbol>>,
     /// PageRank scores: file_path → importance score.
     #[serde(default)]
     pub file_ranks: HashMap<String, f64>,
@@ -492,6 +495,8 @@ pub struct PatrolResult {
     pub cla_signed: usize,
     pub prs_skipped: usize,
     pub issues_found: usize,
+    /// Closed PRs where rejection learnings were stored.
+    pub prs_learned: usize,
     #[serde(default)]
     pub errors: Vec<String>,
 }

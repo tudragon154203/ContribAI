@@ -1031,7 +1031,9 @@ impl<'a> ContribPipeline<'a> {
             }
         }
 
-        // v5.7.1: Cross-file import resolution — enrich symbol_map with resolved imports
+        // v5.8.0: Cross-file import resolution — separate from symbol_map
+        let mut resolved_imports: HashMap<String, Vec<crate::core::models::Symbol>> =
+            HashMap::new();
         for (file_path, content) in &relevant_files {
             let import_targets =
                 crate::analysis::ast_intel::AstIntel::extract_import_targets(content, file_path);
@@ -1041,7 +1043,6 @@ impl<'a> ContribPipeline<'a> {
                     &symbol_map,
                 );
                 if !resolved.is_empty() {
-                    // Add resolved cross-file symbols as virtual entries
                     let cross_symbols: Vec<crate::core::models::Symbol> = resolved
                         .iter()
                         .map(|(name, sig)| crate::core::models::Symbol {
@@ -1052,8 +1053,8 @@ impl<'a> ContribPipeline<'a> {
                             line_end: 0,
                         })
                         .collect();
-                    symbol_map
-                        .entry(format!("_cross_file_{}", file_path))
+                    resolved_imports
+                        .entry(file_path.clone())
                         .or_default()
                         .extend(cross_symbols);
                 }
@@ -1076,6 +1077,7 @@ impl<'a> ContribPipeline<'a> {
             open_issues: Vec::new(),
             coding_style,
             symbol_map,
+            resolved_imports,
             file_ranks: HashMap::new(),
         };
 
@@ -1114,7 +1116,12 @@ impl<'a> ContribPipeline<'a> {
 
             match generator.generate(finding, &repo_context).await {
                 Ok(Some(contribution)) => {
-                    let report = self.scorer.evaluate(&contribution);
+                    let repo_prefs = self
+                        .memory
+                        .get_repo_preferences(&repo.full_name)
+                        .ok()
+                        .flatten();
+                    let report = self.scorer.evaluate(&contribution, repo_prefs.as_ref());
                     if !report.passed {
                         info!(
                             title = %contribution.title,
@@ -1334,6 +1341,7 @@ impl<'a> ContribPipeline<'a> {
             open_issues: Vec::new(),
             coding_style: None,
             symbol_map: HashMap::new(),
+            resolved_imports: HashMap::new(),
             file_ranks: HashMap::new(),
         };
 

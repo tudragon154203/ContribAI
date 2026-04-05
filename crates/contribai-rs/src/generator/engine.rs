@@ -280,6 +280,26 @@ impl<'a> ContributionGenerator<'a> {
             }
         }
 
+        // v5.8.1: Cross-file resolved imports (separate from symbol_map)
+        {
+            let cross_sigs: Vec<String> = context
+                .resolved_imports
+                .values()
+                .flatten()
+                .take(20)
+                .map(|s| format!("{} ({})", s.name, s.file_path))
+                .collect();
+
+            if !cross_sigs.is_empty() {
+                let joined = cross_sigs.join("\n");
+                let ctx = safe_truncate(&joined, 1500);
+                prompt.push_str(&format!(
+                    "\n## Cross-file Imports (resolved)\n```\n{}\n```\n\n",
+                    ctx
+                ));
+            }
+        }
+
         prompt.push_str("\n## Output Format\nReturn your changes as a JSON object.\n\n");
 
         if !current_content.is_empty() {
@@ -490,6 +510,7 @@ pub(crate) mod tests {
             open_issues: vec![],
             coding_style: None,
             symbol_map: HashMap::new(),
+            resolved_imports: HashMap::new(),
             file_ranks: HashMap::new(),
         }
     }

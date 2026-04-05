@@ -4,7 +4,7 @@
 //! Scans ContribAI PRs for maintainer comments, classifies
 //! feedback via LLM, generates code fixes, and pushes updates.
 
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::core::error::Result;
 use crate::core::models::{FeedbackAction, FeedbackItem, PatrolResult};
@@ -84,6 +84,21 @@ impl<'a> PrPatrol<'a> {
         for pr in pr_records {
             let status = pr["status"].as_str().unwrap_or("");
             if !["open", "pending", "review_requested"].contains(&status) {
+                // v5.8.1: Analyze closed/merged PRs for outcome learnings
+                if status == "closed" || status == "merged" || status == "ci_failed" {
+                    let repo = pr["repo"].as_str().unwrap_or("");
+                    let pr_number = pr["pr_number"].as_i64().unwrap_or(0);
+                    let pr_type = pr["type"].as_str().unwrap_or("unknown");
+                    let parts: Vec<&str> = repo.splitn(2, '/').collect();
+                    if parts.len() == 2 {
+                        if let Err(e) = self
+                            .analyze_closed_pr(parts[0], parts[1], pr_number, pr_type, &mut result)
+                            .await
+                        {
+                            debug!(pr = pr_number, error = %e, "Failed to analyze closed PR");
+                        }
+                    }
+                }
                 result.prs_skipped += 1;
                 continue;
             }
@@ -646,6 +661,118 @@ impl<'a> PrPatrol<'a> {
             text.to_string()
         }
     }
+
+    /// Analyze a closed/merged PR to store outcome learnings.
+    async fn analyze_closed_pr(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: i64,
+        pr_type: &str,
+        result: &mut PatrolResult,
+    ) -> Result<()> {
+        let Some(memory) = self.memory else {
+            return Ok(());
+        };
+
+        let pr_data = self.github.get_pr_details(owner, repo, pr_number).await?;
+        let full_repo = format!("{}/{}", owner, repo);
+        let pr_url = pr_data["html_url"].as_str().unwrap_or("");
+
+        // Calculate time to close
+        let created = pr_data["created_at"]
+            .as_str()
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok());
+        let closed = pr_data["closed_at"]
+            .as_str()
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok());
+        let hours = match (created, closed) {
+            (Some(c), Some(cl)) => (cl - c).num_hours() as f64,
+            _ => 0.0,
+        };
+
+        if pr_data["merged"].as_bool() == Some(true) {
+            memory.record_outcome(&full_repo, pr_number, pr_url, pr_type, "merged", "", hours)?;
+            info!(pr = pr_number, repo = %full_repo, "📊 Recorded merged outcome");
+        } else {
+            // Closed without merge — fetch comments for feedback analysis
+            let comments = self
+                .github
+                .get_pr_comments(owner, repo, pr_number)
+                .await
+                .unwrap_or_default();
+
+            let feedback_text: String = comments
+                .iter()
+                .rev()
+                .take(5)
+                .filter_map(|c| c["body"].as_str())
+                .collect::<Vec<_>>()
+                .join(" | ");
+
+            let summary = if feedback_text.len() > 500 {
+                feedback_text[..500].to_string()
+            } else {
+                feedback_text.clone()
+            };
+
+            let reason = classify_rejection_reason(&feedback_text);
+            let tagged = format!("[{}] {}", reason, summary);
+
+            memory.record_outcome(
+                &full_repo, pr_number, pr_url, pr_type, "closed", &tagged, hours,
+            )?;
+            info!(
+                pr = pr_number,
+                repo = %full_repo,
+                reason = reason,
+                "📊 Recorded closed outcome with rejection learnings"
+            );
+        }
+
+        memory.update_pr_status(
+            &full_repo,
+            pr_number,
+            if pr_data["merged"].as_bool() == Some(true) {
+                "merged"
+            } else {
+                "closed"
+            },
+        )?;
+        result.prs_learned += 1;
+        Ok(())
+    }
+}
+
+/// Classify rejection reason from review comments using keyword heuristics.
+fn classify_rejection_reason(text: &str) -> &'static str {
+    let lower = text.to_lowercase();
+    if lower.contains("duplicate") || lower.contains("already") {
+        "duplicate"
+    } else if lower.contains("won't fix")
+        || lower.contains("not needed")
+        || lower.contains("not wanted")
+        || lower.contains("wontfix")
+    {
+        "unwanted"
+    } else if lower.contains(" ci ")
+        || lower.contains("test fail")
+        || lower.contains("ci fail")
+        || lower.contains("broken build")
+        || lower.contains("check fail")
+    {
+        "ci_failure"
+    } else if lower.contains("style")
+        || lower.contains("convention")
+        || lower.contains("format")
+        || lower.contains("lint")
+    {
+        "style_mismatch"
+    } else if lower.contains("stale") || lower.contains("outdated") || lower.contains("old") {
+        "stale"
+    } else {
+        "unknown"
+    }
 }
 
 // ── CI Monitor ────────────────────────────────────────────────────────────────
@@ -827,6 +954,39 @@ mod tests {
 
         // NoCi
         assert_eq!(CiOutcome::NoCi, CiOutcome::NoCi);
+    }
+
+    #[test]
+    fn test_classify_rejection_reason() {
+        assert_eq!(
+            classify_rejection_reason("This is a duplicate of #42"),
+            "duplicate"
+        );
+        assert_eq!(
+            classify_rejection_reason("We already have this feature"),
+            "duplicate"
+        );
+        assert_eq!(
+            classify_rejection_reason("Not needed, won't fix this"),
+            "unwanted"
+        );
+        assert_eq!(
+            classify_rejection_reason("The CI failed on this PR"),
+            "ci_failure"
+        );
+        assert_eq!(
+            classify_rejection_reason("Check failed: lint errors"),
+            "ci_failure"
+        );
+        assert_eq!(
+            classify_rejection_reason("Doesn't follow our style guide"),
+            "style_mismatch"
+        );
+        assert_eq!(
+            classify_rejection_reason("This PR is stale, closing"),
+            "stale"
+        );
+        assert_eq!(classify_rejection_reason("Thanks but no thanks"), "unknown");
     }
 
     #[test]

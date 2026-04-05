@@ -7,11 +7,14 @@ mod common;
 
 use chrono::Utc;
 use contribai::core::events::{Event, EventBus, EventType};
-use contribai::core::models::{Contribution, ContributionType, FileChange, Finding, Severity};
+use contribai::core::models::{
+    Contribution, ContributionType, FileChange, Finding, Severity, Symbol, SymbolKind,
+};
 use contribai::generator::risk::{classify_risk, is_within_tolerance, RiskLevel};
 use contribai::generator::scorer::QualityScorer;
 use contribai::orchestrator::memory::Memory;
 use contribai::orchestrator::pipeline::merge_contributions_pub;
+use std::collections::HashMap;
 
 // ── Test Helpers ──────────────────────────────────────────────────────────
 
@@ -101,7 +104,7 @@ fn test_scorer_good_contribution_passes() {
         &[("src/handler.rs", "use std::collections::HashMap;\nfn handle() {\n    let m = HashMap::new();\n    println!(\"{:?}\", m);\n}\n")],
     );
 
-    let report = scorer.evaluate(&c);
+    let report = scorer.evaluate(&c, None);
     assert!(
         report.passed,
         "Good contribution should pass: {}",
@@ -116,7 +119,7 @@ fn test_scorer_no_changes_detected() {
     let mut c = make_contribution("empty fix", &[("src/x.rs", "placeholder")]);
     c.changes.clear(); // no file changes at all
 
-    let report = scorer.evaluate(&c);
+    let report = scorer.evaluate(&c, None);
     // has_changes check should fail
     let has_check = report
         .checks
@@ -139,7 +142,7 @@ fn test_scorer_debug_code_penalized() {
         )],
     );
 
-    let report = scorer.evaluate(&c);
+    let report = scorer.evaluate(&c, None);
     let debug_check = report.checks.iter().find(|c| c.name == "no_debug_code");
     assert!(debug_check.is_some());
     let check = debug_check.unwrap();
@@ -336,5 +339,76 @@ fn test_semantic_chunk_respects_budget() {
         chunks.len() > 1,
         "Should split into multiple chunks, got {}",
         chunks.len()
+    );
+}
+
+// ── Symbol Map + Resolved Imports Wiring (M-3) ──────────────────────────
+
+#[test]
+fn test_symbol_map_not_polluted_by_cross_file_keys() {
+    // Build a RepoContext with symbol_map and resolved_imports separately
+    let mut symbol_map = HashMap::new();
+    symbol_map.insert(
+        "src/lib.rs".to_string(),
+        vec![Symbol {
+            name: "Config".into(),
+            kind: SymbolKind::Struct,
+            file_path: "src/lib.rs".into(),
+            line_start: 10,
+            line_end: 25,
+        }],
+    );
+
+    let mut resolved_imports = HashMap::new();
+    resolved_imports.insert(
+        "src/main.rs".to_string(),
+        vec![Symbol {
+            name: "Config [resolved: Struct Config (src/lib.rs:L10-L25)]".into(),
+            kind: SymbolKind::Import,
+            file_path: "src/main.rs".into(),
+            line_start: 0,
+            line_end: 0,
+        }],
+    );
+
+    // Verify no _cross_file_ keys in symbol_map
+    assert!(
+        !symbol_map.keys().any(|k| k.starts_with("_cross_file_")),
+        "symbol_map must not contain _cross_file_ keys"
+    );
+
+    // Verify resolved_imports has expected data
+    assert_eq!(resolved_imports.len(), 1);
+    assert!(resolved_imports.contains_key("src/main.rs"));
+}
+
+#[test]
+fn test_cross_file_import_resolution_end_to_end() {
+    use contribai::analysis::ast_intel::AstIntel;
+
+    // Python file that imports from a sibling module
+    let main_py = "from config import Config\n\ndef main():\n    c = Config()\n";
+    let config_py = "class Config:\n    def __init__(self):\n        self.value = 42\n";
+
+    // Extract symbols from config.py
+    let symbols = AstIntel::extract_symbols(config_py, "config.py").unwrap();
+    assert!(!symbols.is_empty(), "Should extract Config symbol");
+
+    // Build symbol_map
+    let mut symbol_map = HashMap::new();
+    symbol_map.insert("config.py".to_string(), symbols);
+
+    // Extract imports from main.py and resolve
+    let imports = AstIntel::extract_import_targets(main_py, "main.py");
+    assert!(!imports.is_empty(), "Should extract Config import");
+
+    let resolved = AstIntel::resolve_imports(&imports, &symbol_map);
+    assert!(
+        !resolved.is_empty(),
+        "Should resolve Config to config.py definition"
+    );
+    assert!(
+        resolved.contains_key("Config"),
+        "Should resolve Config symbol"
     );
 }

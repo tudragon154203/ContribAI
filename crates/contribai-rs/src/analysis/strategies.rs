@@ -344,6 +344,7 @@ mod tests {
             open_issues: vec![],
             coding_style: None,
             symbol_map: HashMap::new(),
+            resolved_imports: HashMap::new(),
             file_ranks: HashMap::new(),
         }
     }

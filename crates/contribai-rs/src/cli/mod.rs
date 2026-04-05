@@ -808,6 +808,7 @@ impl Cli {
                     open_issues: Vec::new(),
                     coding_style: None,
                     symbol_map: std::collections::HashMap::new(),
+                    resolved_imports: std::collections::HashMap::new(),
                     file_ranks: std::collections::HashMap::new(),
                 };
 

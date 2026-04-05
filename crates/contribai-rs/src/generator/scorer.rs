@@ -53,7 +53,11 @@ impl QualityScorer {
     }
 
     /// Run all quality checks on a contribution.
-    pub fn evaluate(&self, contribution: &Contribution) -> QualityReport {
+    pub fn evaluate(
+        &self,
+        contribution: &Contribution,
+        repo_prefs: Option<&crate::orchestrator::memory::RepoPreferences>,
+    ) -> QualityReport {
         let checks = vec![
             self.check_has_changes(contribution),
             self.check_change_size(contribution),
@@ -62,6 +66,7 @@ impl QualityScorer {
             self.check_no_debug_code(contribution),
             self.check_no_placeholders(contribution),
             self.check_file_coherence(contribution),
+            self.check_outcome_history(contribution, repo_prefs),
         ];
 
         let total_score: f64 = checks.iter().map(|c| c.score).sum::<f64>() / checks.len() as f64;
@@ -263,6 +268,64 @@ impl QualityScorer {
         }
     }
 
+    fn check_outcome_history(
+        &self,
+        c: &Contribution,
+        prefs: Option<&crate::orchestrator::memory::RepoPreferences>,
+    ) -> CheckResult {
+        let Some(prefs) = prefs else {
+            return CheckResult {
+                name: "outcome_history".into(),
+                passed: true,
+                score: 0.7,
+                reason: "No outcome history available".into(),
+            };
+        };
+
+        let type_str = format!("{:?}", c.contribution_type).to_lowercase();
+
+        if prefs
+            .rejected_types
+            .iter()
+            .any(|t| t.to_lowercase() == type_str)
+        {
+            return CheckResult {
+                name: "outcome_history".into(),
+                passed: false,
+                score: 0.2,
+                reason: format!("Type '{}' was previously rejected by this repo", type_str),
+            };
+        }
+
+        if prefs
+            .preferred_types
+            .iter()
+            .any(|t| t.to_lowercase() == type_str)
+        {
+            return CheckResult {
+                name: "outcome_history".into(),
+                passed: true,
+                score: 1.0,
+                reason: format!("Type '{}' was previously merged by this repo", type_str),
+            };
+        }
+
+        let (score, reason) = if prefs.merge_rate < 0.2 {
+            (0.4, "Repo has low merge rate (<20%)")
+        } else if prefs.merge_rate >= 0.5 {
+            (0.9, "Repo has good merge rate (>=50%)")
+        } else {
+            (0.6, "Repo has moderate merge rate")
+        };
+
+        CheckResult {
+            name: "outcome_history".into(),
+            passed: score >= 0.5,
+            score,
+            reason: reason.into(),
+        }
+    }
+
     fn check_file_coherence(&self, c: &Contribution) -> CheckResult {
         // Check that all changed files relate to the finding
         let finding_dir = c
@@ -347,7 +410,7 @@ mod tests {
     fn test_quality_scorer_good_contribution() {
         let scorer = QualityScorer::default();
         let c = test_contribution();
-        let report = scorer.evaluate(&c);
+        let report = scorer.evaluate(&c, None);
 
         assert!(
             report.passed,
@@ -363,7 +426,7 @@ mod tests {
         let mut c = test_contribution();
         c.changes = vec![];
 
-        let report = scorer.evaluate(&c);
+        let report = scorer.evaluate(&c, None);
         let check = report
             .checks
             .iter()
@@ -385,7 +448,7 @@ mod tests {
             is_deleted: false,
         }];
 
-        let report = scorer.evaluate(&c);
+        let report = scorer.evaluate(&c, None);
         let debug_check = report.checks.iter().find(|c| c.name == "no_debug_code");
         assert!(!debug_check.unwrap().passed, "Should catch debug code");
     }
@@ -394,10 +457,68 @@ mod tests {
     fn test_quality_scorer_conventional_commit() {
         let scorer = QualityScorer::default();
         let c = test_contribution();
-        let report = scorer.evaluate(&c);
+        let report = scorer.evaluate(&c, None);
 
         let commit_check = report.checks.iter().find(|c| c.name == "commit_message");
         assert!(commit_check.unwrap().passed);
         assert_eq!(commit_check.unwrap().score, 1.0);
+    }
+
+    #[test]
+    fn test_outcome_history_no_prefs_neutral() {
+        let scorer = QualityScorer::default();
+        let c = test_contribution();
+        let report = scorer.evaluate(&c, None);
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "outcome_history")
+            .unwrap();
+        assert!(check.passed);
+        assert!((check.score - 0.7).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_outcome_history_rejected_type_penalized() {
+        use crate::orchestrator::memory::RepoPreferences;
+        let scorer = QualityScorer::default();
+        let c = test_contribution();
+        let prefs = RepoPreferences {
+            preferred_types: vec![],
+            rejected_types: vec!["securityfix".into()],
+            merge_rate: 0.5,
+            avg_review_hours: 24.0,
+            notes: String::new(),
+        };
+        let report = scorer.evaluate(&c, Some(&prefs));
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "outcome_history")
+            .unwrap();
+        assert!(!check.passed);
+        assert!((check.score - 0.2).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_outcome_history_preferred_type_boosted() {
+        use crate::orchestrator::memory::RepoPreferences;
+        let scorer = QualityScorer::default();
+        let c = test_contribution();
+        let prefs = RepoPreferences {
+            preferred_types: vec!["securityfix".into()],
+            rejected_types: vec![],
+            merge_rate: 0.5,
+            avg_review_hours: 24.0,
+            notes: String::new(),
+        };
+        let report = scorer.evaluate(&c, Some(&prefs));
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "outcome_history")
+            .unwrap();
+        assert!(check.passed);
+        assert!((check.score - 1.0).abs() < 0.01);
     }
 }

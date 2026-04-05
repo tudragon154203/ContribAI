@@ -352,7 +352,7 @@ impl AstIntel {
 
         let root = tree.root_node();
         let mut targets = Vec::new();
-        Self::walk_import_nodes(root, source, lang, &mut targets);
+        Self::walk_import_nodes(root, source, lang, &mut targets, 0);
         targets
     }
 
@@ -362,7 +362,11 @@ impl AstIntel {
         source: &str,
         lang: Language,
         targets: &mut Vec<ImportTarget>,
+        depth: usize,
     ) {
+        if depth > 8 {
+            return;
+        }
         let kind = node.kind();
         let text = &source[node.byte_range()];
 
@@ -523,7 +527,7 @@ impl AstIntel {
         // Recurse into children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            Self::walk_import_nodes(child, source, lang, targets);
+            Self::walk_import_nodes(child, source, lang, targets, depth + 1);
         }
     }
 
